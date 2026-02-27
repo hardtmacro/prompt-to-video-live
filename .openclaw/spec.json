@@ -1,12 +1,11 @@
 {
   "project_name": "prompt-to-video-live",
-  "description": "Fix automatic scrolling and TTS voice changing per node in the prompt to video live project",
+  "description": "Fix audio playback issue in the prompt to video live project",
   "features": [
-    "Fix automatic scrolling functionality",
-    "Ensure TTS model changes voice on each node"
+    "Fix audio playback not working"
   ],
   "is_update": true,
-  "existing_project": "prompt-to-video-live",
+  "existing_project": "Prompt to video - Live!",
   "design_notes": null,
   "has_dynamic_features": true,
   "stack_tags": [
@@ -16,5 +15,5 @@
     "framer-motion"
   ],
   "reference_urls": [],
-  "user_feedback": "Its not scrolling automatically yet. also the tts model is not changing the\r\nvoice on each node."
+  "user_feedback": "I cant hear the audio."
 }
