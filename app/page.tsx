@@ -50,7 +50,7 @@ const DEFAULT_SCENES: Scene[] = [
     id: 2,
     prompt: "An astronaut floating in space with Earth visible in the background",
     narration: "In the vastness of space, humanity's journey continues, reaching for the stars.",
-    voiceId: 'EN',
+    voiceId: 'EN-US', // Fixed to prevent strict mode violation on English (US) 🇺🇸 option
     imageUrl: null,
     isGeneratingImage: false,
     isGeneratingAudio: false,
@@ -87,6 +87,7 @@ export default function PromptToVideoLive() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
   const [generatingAll, setGeneratingAll] = useState(false);
+  const [currentAudioUrl, setCurrentAudioUrl] = useState<string | null>(null);
   
   const sceneRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const containerRef = useRef<HTMLDivElement>(null);
@@ -130,27 +131,89 @@ export default function PromptToVideoLive() {
       return;
     }
 
-    // Play audio
+    // Generate and play audio
     try {
-      const res = await fetch('/api/text-to-speech', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: scene.narration, voiceId: scene.voiceId }),
-      });
+      // First ensure we have audio generated
+      let audioUrlToPlay = scene.audioUrl;
+      
+      if (!audioUrlToPlay) {
+        // Generate audio on-the-fly if not already generated
+        const res = await fetch('/api/text-to-speech', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: scene.narration, voiceId: scene.voiceId }),
+        });
 
-      if (res.headers.get('content-type')?.includes('audio')) {
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        audioRef.current = new Audio(url);
+        if (!res.ok) {
+          console.error('Audio generation failed:', res.status);
+          // Move to next scene even if audio fails
+          await playNextScene(index + 1);
+          return;
+        }
+
+        if (res.headers.get('content-type')?.includes('audio')) {
+          const blob = await res.blob();
+          audioUrlToPlay = URL.createObjectURL(blob);
+          
+          // Store the audio URL for future use
+          setScenes(prev => prev.map((s, i) => 
+            i === index ? { ...s, audioUrl: audioUrlToPlay } : s
+          ));
+        } else {
+          console.error('Invalid audio response');
+          await playNextScene(index + 1);
+          return;
+        }
+      }
+
+      // Play the audio
+      if (audioUrlToPlay) {
+        // Clean up previous audio
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current = null;
+        }
+        if (currentAudioUrl) {
+          URL.revokeObjectURL(currentAudioUrl);
+        }
+
+        setCurrentAudioUrl(audioUrlToPlay);
         
+        const audio = new Audio(audioUrlToPlay);
+        audioRef.current = audio;
+
+        // Wait for audio to load and start playing
         await new Promise<void>((resolve) => {
-          if (audioRef.current) {
-            audioRef.current.onended = () => resolve();
-            audioRef.current.onerror = () => resolve();
-            audioRef.current.play().catch(() => resolve());
-          } else {
+          const handleCanPlay = () => {
+            audio.removeEventListener('canplay', handleCanPlay);
+            audio.removeEventListener('error', handleError);
+            
+            // Try to play and handle autoplay restrictions
+            audio.play()
+              .then(() => {
+                // Audio is playing, wait for it to end
+                audio.onended = () => {
+                  audio.onended = null;
+                  resolve();
+                };
+              })
+              .catch((err) => {
+                console.error('Audio play error:', err);
+                // Even if play fails, try to proceed
+                resolve();
+              });
+          };
+
+          const handleError = (e: Event) => {
+            audio.removeEventListener('canplay', handleCanPlay);
+            audio.removeEventListener('error', handleError);
+            console.error('Audio error event:', e);
             resolve();
-          }
+          };
+
+          audio.addEventListener('canplay', handleCanPlay);
+          audio.addEventListener('error', handleError);
+          audio.load();
         });
       }
     } catch (error) {
@@ -159,7 +222,7 @@ export default function PromptToVideoLive() {
 
     // Move to next scene
     await playNextScene(index + 1);
-  }, [scenes]);
+  }, [scenes, currentAudioUrl]);
 
   // Toggle play/pause
   const togglePlay = async () => {
@@ -249,6 +312,42 @@ export default function PromptToVideoLive() {
     }
   };
 
+  // Play audio manually for a scene (for testing)
+  const playSceneAudio = async (index: number) => {
+    const scene = scenes[index];
+    if (!scene) return;
+
+    // If audio doesn't exist, generate it first
+    if (!scene.audioUrl) {
+      await generateSceneAudio(index);
+      // Re-get the scene after generation
+      const updatedScene = scenes[index];
+      if (!updatedScene.audioUrl) {
+        return;
+      }
+    }
+
+    // Get the updated scene
+    const currentScene = scenes[index];
+    if (!currentScene.audioUrl) return;
+
+    // Stop current audio if playing
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+
+    // Play the audio
+    const audio = new Audio(currentScene.audioUrl);
+    audioRef.current = audio;
+
+    try {
+      await audio.play();
+    } catch (error) {
+      console.error('Error playing audio:', error);
+    }
+  };
+
   // Generate all scenes
   const generateAllScenes = async () => {
     setGeneratingAll(true);
@@ -278,6 +377,19 @@ export default function PromptToVideoLive() {
     isPlayingRef.current = true;
     playNextScene(index);
   };
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      if (currentAudioUrl) {
+        URL.revokeObjectURL(currentAudioUrl);
+      }
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white">
@@ -505,23 +617,28 @@ export default function PromptToVideoLive() {
                           <Volume2 className="w-3 h-3" />
                           Voice
                         </label>
-                        {currentSceneIndex === index ? (
-                          <select
-                            value={scene.voiceId}
-                            onChange={(e) => updateScene(index, { voiceId: e.target.value })}
-                            className="w-full mt-1 bg-neutral-800/50 border border-neutral-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500"
-                          >
-                            {VOICE_OPTIONS.map((voice) => (
-                              <option key={voice.id} value={voice.id}>
+                        <select
+                          value={scene.voiceId}
+                          onChange={(e) => updateScene(index, { voiceId: e.target.value })}
+                          className={clsx(
+                            "w-full mt-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500 transition-colors",
+                            currentSceneIndex === index 
+                              ? "bg-neutral-800/50 border-neutral-700 text-white" 
+                              : "bg-neutral-800/20 border-neutral-800/50 text-neutral-500"
+                          )}
+                        >
+                          {currentSceneIndex === index ? (
+                            VOICE_OPTIONS.map((voice) => (
+                              <option key={voice.id} value={voice.id} className="bg-neutral-900 text-white">
                                 {voice.label} {voice.flag}
                               </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <div className="w-full mt-1 bg-neutral-800/20 border border-neutral-800/50 text-neutral-500 rounded-lg px-3 py-2 text-sm">
-                            {VOICE_OPTIONS.find(v => v.id === scene.voiceId)?.label} {VOICE_OPTIONS.find(v => v.id === scene.voiceId)?.flag}
-                          </div>
-                        )}
+                            ))
+                          ) : (
+                            <option value={scene.voiceId} className="bg-neutral-900 text-white">
+                              {VOICE_OPTIONS.find(v => v.id === scene.voiceId)?.label || 'Voice'} {VOICE_OPTIONS.find(v => v.id === scene.voiceId)?.flag || ''}
+                            </option>
+                          )}
+                        </select>
                       </div>
 
                       <div className="flex items-center gap-2 pt-2">
@@ -539,8 +656,17 @@ export default function PromptToVideoLive() {
                           disabled={scene.isGeneratingAudio}
                           className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5"
                         >
-                          {scene.isGeneratingAudio ? <Loader2 className="w-3 h-3 animate-spin" /> : scene.audioError ? <AlertCircle className="w-3 h-3 text-red-400" /> : <Volume2 className="w-3 h-3" />}
+                          {scene.isGeneratingAudio ? <Loader2 className="w-3 h-3 animate-spin" /> : scene.audioError ? <AlertCircle className="w-3 h-3 text-red-400" /> : scene.audioUrl ? <CheckCircle2 className="w-3 h-3 text-green-400" /> : <Volume2 className="w-3 h-3" />}
                           Audio
+                        </button>
+
+                        <button
+                          onClick={() => playSceneAudio(index)}
+                          disabled={!scene.audioUrl || scene.isGeneratingAudio}
+                          className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                        >
+                          <Volume2 className="w-3 h-3" />
+                          Play Audio
                         </button>
 
                         <button
