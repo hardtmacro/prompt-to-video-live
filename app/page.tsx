@@ -120,108 +120,122 @@ export default function PromptToVideoLive() {
       return;
     }
 
-    setCurrentSceneIndex(index);
-
-    // Wait for image and audio to be ready
-    const scene = scenes[index];
-    if (!scene.imageUrl || scene.isGeneratingImage || scene.isGeneratingAudio) {
-      // Wait a bit and check again
-      await new Promise(resolve => setTimeout(resolve, 500));
-      await playNextScene(index);
-      return;
-    }
-
-    // Generate and play audio
-    try {
-      // First ensure we have audio generated
-      let audioUrlToPlay = scene.audioUrl;
+    // Get fresh scene data from state to ensure we have the latest voiceId
+    setScenes(prevScenes => {
+      const scene = prevScenes[index];
+      if (!scene) return prevScenes;
       
-      if (!audioUrlToPlay) {
-        // Generate audio on-the-fly if not already generated
-        const res = await fetch('/api/text-to-speech', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: scene.narration, voiceId: scene.voiceId }),
-        });
+      setCurrentSceneIndex(index);
 
-        if (!res.ok) {
-          console.error('Audio generation failed:', res.status);
-          // Move to next scene even if audio fails
-          await playNextScene(index + 1);
-          return;
-        }
+      // Wait for image and audio to be ready
+      if (!scene.imageUrl || scene.isGeneratingImage || scene.isGeneratingAudio) {
+        // Wait a bit and check again
+        setTimeout(() => playNextScene(index), 500);
+        return prevScenes;
+      }
 
-        if (res.headers.get('content-type')?.includes('audio')) {
-          const blob = await res.blob();
-          audioUrlToPlay = URL.createObjectURL(blob);
+      // Generate and play audio
+      (async () => {
+        try {
+          // First ensure we have audio generated
+          let audioUrlToPlay = scene.audioUrl;
           
-          // Store the audio URL for future use
-          setScenes(prev => prev.map((s, i) => 
-            i === index ? { ...s, audioUrl: audioUrlToPlay } : s
-          ));
-        } else {
-          console.error('Invalid audio response');
-          await playNextScene(index + 1);
-          return;
-        }
-      }
-
-      // Play the audio
-      if (audioUrlToPlay) {
-        // Clean up previous audio
-        if (audioRef.current) {
-          audioRef.current.pause();
-          audioRef.current = null;
-        }
-        if (currentAudioUrl) {
-          URL.revokeObjectURL(currentAudioUrl);
-        }
-
-        setCurrentAudioUrl(audioUrlToPlay);
-        
-        const audio = new Audio(audioUrlToPlay);
-        audioRef.current = audio;
-
-        // Wait for audio to load and start playing
-        await new Promise<void>((resolve) => {
-          const handleCanPlay = () => {
-            audio.removeEventListener('canplay', handleCanPlay);
-            audio.removeEventListener('error', handleError);
+          if (!audioUrlToPlay) {
+            // Debug log to verify voice is being used
+            console.log(`[Audio Generation] Scene ${index + 1}: Using voiceId="${scene.voiceId}" for narration`);
             
-            // Try to play and handle autoplay restrictions
-            audio.play()
-              .then(() => {
-                // Audio is playing, wait for it to end
-                audio.onended = () => {
-                  audio.onended = null;
-                  resolve();
-                };
-              })
-              .catch((err) => {
-                console.error('Audio play error:', err);
-                // Even if play fails, try to proceed
+            // Generate audio on-the-fly if not already generated
+            const res = await fetch('/api/text-to-speech', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                text: scene.narration, 
+                voiceId: scene.voiceId 
+              }),
+            });
+
+            if (!res.ok) {
+              console.error('Audio generation failed:', res.status);
+              // Move to next scene even if audio fails
+              playNextScene(index + 1);
+              return;
+            }
+
+            if (res.headers.get('content-type')?.includes('audio')) {
+              const blob = await res.blob();
+              audioUrlToPlay = URL.createObjectURL(blob);
+              
+              // Store the audio URL for future use
+              setScenes(prev => prev.map((s, i) => 
+                i === index ? { ...s, audioUrl: audioUrlToPlay } : s
+              ));
+            } else {
+              console.error('Invalid audio response');
+              playNextScene(index + 1);
+              return;
+            }
+          }
+
+          // Play the audio
+          if (audioUrlToPlay) {
+            // Clean up previous audio
+            if (audioRef.current) {
+              audioRef.current.pause();
+              audioRef.current = null;
+            }
+            if (currentAudioUrl) {
+              URL.revokeObjectURL(currentAudioUrl);
+            }
+
+            setCurrentAudioUrl(audioUrlToPlay);
+            
+            const audio = new Audio(audioUrlToPlay);
+            audioRef.current = audio;
+
+            // Wait for audio to load and start playing
+            await new Promise<void>((resolve) => {
+              const handleCanPlay = () => {
+                audio.removeEventListener('canplay', handleCanPlay);
+                audio.removeEventListener('error', handleError);
+                
+                // Try to play and handle autoplay restrictions
+                audio.play()
+                  .then(() => {
+                    // Audio is playing, wait for it to end
+                    audio.onended = () => {
+                      audio.onended = null;
+                      resolve();
+                    };
+                  })
+                  .catch((err) => {
+                    console.error('Audio play error:', err);
+                    // Even if play fails, try to proceed
+                    resolve();
+                  });
+              };
+
+              const handleError = (e: Event) => {
+                audio.removeEventListener('canplay', handleCanPlay);
+                audio.removeEventListener('error', handleError);
+                console.error('Audio error event:', e);
                 resolve();
-              });
-          };
+              };
 
-          const handleError = (e: Event) => {
-            audio.removeEventListener('canplay', handleCanPlay);
-            audio.removeEventListener('error', handleError);
-            console.error('Audio error event:', e);
-            resolve();
-          };
+              audio.addEventListener('canplay', handleCanPlay);
+              audio.addEventListener('error', handleError);
+              audio.load();
+            });
+          }
+        } catch (error) {
+          console.error('Audio playback error:', error);
+        }
 
-          audio.addEventListener('canplay', handleCanPlay);
-          audio.addEventListener('error', handleError);
-          audio.load();
-        });
-      }
-    } catch (error) {
-      console.error('Audio playback error:', error);
-    }
+        // Move to next scene
+        playNextScene(index + 1);
+      })();
 
-    // Move to next scene
-    await playNextScene(index + 1);
+      return prevScenes;
+    });
   }, [scenes, currentAudioUrl]);
 
   // Toggle play/pause
@@ -274,9 +288,11 @@ export default function PromptToVideoLive() {
     }
   };
 
-  // Generate audio for a scene
+  // Generate audio for a scene - ensuring voiceId is always used
   const generateSceneAudio = async (index: number) => {
-    const scene = scenes[index];
+    // Get fresh scene data to ensure we have the latest voiceId
+    const currentScenes = scenes;
+    const scene = currentScenes[index];
     if (!scene) return;
 
     setScenes(prev => prev.map((s, i) => 
@@ -284,10 +300,16 @@ export default function PromptToVideoLive() {
     ));
 
     try {
+      // Debug log to verify voice is being used
+      console.log(`[Generate Audio] Scene ${index + 1}: Using voiceId="${scene.voiceId}" for narration: "${scene.narration.substring(0, 50)}..."`);
+
       const res = await fetch('/api/text-to-speech', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: scene.narration, voiceId: scene.voiceId }),
+        body: JSON.stringify({ 
+          text: scene.narration, 
+          voiceId: scene.voiceId 
+        }),
       });
 
       if (!res.ok) throw new Error('Audio generation failed');
@@ -314,22 +336,44 @@ export default function PromptToVideoLive() {
 
   // Play audio manually for a scene (for testing)
   const playSceneAudio = async (index: number) => {
+    // Get fresh scene data to ensure we have the latest voiceId
     const scene = scenes[index];
     if (!scene) return;
+
+    // Debug log to verify voice is being used
+    console.log(`[Play Audio] Scene ${index + 1}: Using voiceId="${scene.voiceId}"`);
 
     // If audio doesn't exist, generate it first
     if (!scene.audioUrl) {
       await generateSceneAudio(index);
-      // Re-get the scene after generation
-      const updatedScene = scenes[index];
-      if (!updatedScene.audioUrl) {
-        return;
-      }
-    }
+      // Re-get the scene after generation - use functional update to get latest
+      setScenes(prev => {
+        const updatedScene = prev[index];
+        if (!updatedScene?.audioUrl) {
+          return prev;
+        }
+        // Continue playing with updated scene
+        (async () => {
+          // Stop current audio if playing
+          if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current = null;
+          }
 
-    // Get the updated scene
-    const currentScene = scenes[index];
-    if (!currentScene.audioUrl) return;
+          // Play the audio
+          const audio = new Audio(updatedScene.audioUrl);
+          audioRef.current = audio;
+
+          try {
+            await audio.play();
+          } catch (error) {
+            console.error('Error playing audio:', error);
+          }
+        })();
+        return prev;
+      });
+      return;
+    }
 
     // Stop current audio if playing
     if (audioRef.current) {
@@ -338,7 +382,7 @@ export default function PromptToVideoLive() {
     }
 
     // Play the audio
-    const audio = new Audio(currentScene.audioUrl);
+    const audio = new Audio(scene.audioUrl);
     audioRef.current = audio;
 
     try {
@@ -615,11 +659,15 @@ export default function PromptToVideoLive() {
                       <div>
                         <label className="text-xs text-neutral-500 uppercase tracking-wider font-medium flex items-center gap-2">
                           <Volume2 className="w-3 h-3" />
-                          Voice
+                          Voice: <span className="text-violet-400">{VOICE_OPTIONS.find(v => v.id === scene.voiceId)?.label || scene.voiceId}</span>
                         </label>
                         <select
                           value={scene.voiceId}
-                          onChange={(e) => updateScene(index, { voiceId: e.target.value })}
+                          onChange={(e) => {
+                            const newVoiceId = e.target.value;
+                            console.log(`[Voice Change] Scene ${index + 1}: Changed voiceId to "${newVoiceId}"`);
+                            updateScene(index, { voiceId: newVoiceId });
+                          }}
                           className={clsx(
                             "w-full mt-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500 transition-colors",
                             currentSceneIndex === index 
