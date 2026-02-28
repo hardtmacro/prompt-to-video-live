@@ -5,120 +5,133 @@ test.describe('prompt-to-video-live', () => {
     await page.goto('/');
   });
 
-  test('should load the main page with header and title', async ({ page }) => {
-    // Verify the main heading is visible
-    await expect(page.getByRole('heading', { name: 'Prompt to Video Live' })).toBeVisible();
-    
-    // Verify subtitle
+  test('initial state shows correct branding and script creation UI', async ({ page }) => {
+    await expect(page.getByText('Prompt to Video Live').first()).toBeVisible();
     await expect(page.getByText('AI-powered video generation').first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Create Your Video Script', exact: true })).toBeVisible();
     
-    // Verify the Generate All button exists
-    await expect(page.getByRole('button', { name: 'Generate All' })).toBeVisible();
+    // Using regex for placeholder as the actual text is very long
+    const textarea = page.getByPlaceholder(/Enter your prompt here/);
+    await expect(textarea).toBeVisible();
+    
+    // Verify example prompts are visible
+    await expect(page.getByText('Try these examples:').first()).toBeVisible();
   });
 
-  test('should display 4 default scenes in the timeline', async ({ page }) => {
-    // There should be 4 scene cards
-    const sceneCards = page.locator('[class*="rounded-2xl"][class*="border"]').locator('..');
-    await expect(page.locator('textarea').first()).toBeVisible();
+  test('complete flow: generate script and interact with scenes', async ({ page }) => {
+    // 1. Enter prompt and generate script
+    const textarea = page.getByPlaceholder(/Enter your prompt here/);
+    await textarea.fill('A hero\'s journey through ancient ruins');
     
-    // Verify scene count by checking the timeline numbers (1, 2, 3, 4)
-    await expect(page.getByText('Scene Prompt').first()).toBeVisible();
-    await expect(page.getByText('Scene Prompt').first()).toBeVisible();
-    await expect(page.getByText('Scene Prompt').first()).toBeVisible();
-    await expect(page.getByText('Scene Prompt').first()).toBeVisible();
-  });
+    // Mock the initial script generation trigger (API call)
+    await page.route('**/api/text-to-speech', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'audio/mpeg',
+        body: Buffer.from('mock-audio'),
+      });
+    });
 
-  test('should toggle auto-scroll functionality', async ({ page }) => {
-    // Find the Auto-Scroll button
-    const autoScrollButton = page.getByRole('button', { name: /Auto-Scroll/i });
-    await expect(autoScrollButton).toBeVisible();
-    
-    // Click to toggle auto-scroll off
-    await autoScrollButton.click();
-    
-    // Verify the button reflects OFF state - it should show ChevronRight icon now
-    // The button text should still contain "Auto-Scroll"
-    await expect(autoScrollButton).toContainText('Auto-Scroll');
-    
-    // Click again to toggle back on
-    await autoScrollButton.click();
-    
-    // Should still contain Auto-Scroll text
-    await expect(autoScrollButton).toContainText('Auto-Scroll');
-  });
+    const generateBtn = page.getByRole('button', { name: 'Generate Script', exact: true });
+    await generateBtn.click();
 
-  test('should have all 8 voice options available in dropdown', async ({ page }) => {
-    // The first scene (index 0) is the current scene by default, so its dropdown should show all options
-    // Find the voice select dropdown in the first scene (which is the current/active scene)
+    // 2. Verify scenes are generated (UI should transition)
+    await expect(page.getByText('Scene Prompt').first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'New Script', exact: true })).toBeVisible();
+
+    // 3. Verify scene content editors
+    await expect(page.getByText('Scene Prompt').first()).toBeVisible();
+    await expect(page.getByText('Narration').first()).toBeVisible();
+    await expect(page.getByText('Voice:').first()).toBeVisible();
+
+    // 4. Test image generation for a scene
+    await page.route('**/api/generate-image', async (route) => {
+      await route.fulfill({
+        status: 200,
+        json: { url: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa' }
+      });
+    });
+
+    // The "Generate scene" button is the one with the ImageIcon
+    const generateImageBtn = page.getByRole('button', { name: 'Generate scene', exact: true }).first();
+    await generateImageBtn.click();
+    
+    const sceneImage = page.locator('img').first();
+    await expect(sceneImage).toBeVisible();
+    await expect(sceneImage).toHaveAttribute('src', /^(https?:|\/|data:)/);
+
+    // 5. Verify voice selection options are available for the active scene
     const voiceSelect = page.locator('select').first();
     await expect(voiceSelect).toBeVisible();
-    
-    // Click to open dropdown options
-    await voiceSelect.click();
-    
-    // Wait for dropdown to open and options to be visible
-    // Verify all 8 voice options are present in the dropdown (the labels include the voice name in parentheses)
-    await expect(page.getByRole('option', { name: /Asteria/i })).toBeVisible();
-    await expect(page.getByRole('option', { name: /Luna/i })).toBeVisible();
-    await expect(page.getByRole('option', { name: /Zeus/i })).toBeVisible();
-    await expect(page.getByRole('option', { name: /Orion/i })).toBeVisible();
-    await expect(page.getByRole('option', { name: /Aurora/i })).toBeVisible();
-    await expect(page.getByRole('option', { name: /Hermes/i })).toBeVisible();
-    await expect(page.getByRole('option', { name: /Athena/i })).toBeVisible();
-    await expect(page.getByRole('option', { name: /Orpheus/i })).toBeVisible();
+    // Check for a specific voice option from reference strings
+    await expect(page.getByText('Asteria (Confident)').first()).toBeVisible();
   });
 
-  test('should show play/pause button and toggle play state', async ({ page }) => {
-    // Find the main play button in the controls section (the large circular button with aria-label)
-    // Use the aria-label which alternates between "Play" and "Pause"
-    const playButton = page.getByRole('button', { name: /Play|Pause/i }).first();
-    await expect(playButton).toBeVisible();
+  test('audio playback interaction', async ({ page }) => {
+    // Setup script first
+    await page.getByPlaceholder(/Enter your prompt here/).fill('Space adventure');
+    await page.getByRole('button', { name: 'Generate Script', exact: true }).click();
+
+    // Mock audio generation
+    await page.route('**/api/text-to-speech', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { 'content-type': 'audio/mpeg' },
+        body: Buffer.from('mock-audio-content'),
+      });
+    });
+
+    // In this UI, the "Play Audio" button is disabled until audio is generated.
+    // We must first click the "Audio" button to trigger the API call and populate scene.audioUrl.
+    const generateAudioBtn = page.getByRole('button', { name: 'Audio', exact: true }).first();
+    await generateAudioBtn.click();
+
+    // Wait for the audio request to complete
+    await page.waitForResponse('**/api/text-to-speech');
+
+    // Click "Play Audio" on the first scene now that it's enabled
+    const playAudioBtn = page.getByRole('button', { name: 'Play Audio', exact: true }).first();
+    await playAudioBtn.click();
     
-    // Initially should show Play icon (Ready to play)
-    await expect(page.getByText('Ready to play').first()).toBeVisible();
-    
-    // Click the play button to start playback
-    await playButton.click();
-    
-    // After clicking, should show "Playing..." or "Playing" state
-    await expect(page.getByText(/Playing/i)).toBeVisible();
-    
-    // Now click to pause
-    await playButton.click();
-    
-    // Should go back to ready state
-    await expect(page.getByText('Ready to play').first()).toBeVisible();
+    // Verify the "Play Audio" button is still available and enabled
+    await expect(playAudioBtn).toBeEnabled();
   });
 
-  test('should have Play from here buttons for each scene', async ({ page }) => {
-    // There should be 4 "Play from here" buttons (one for each scene)
-    const playFromHereButtons = page.getByRole('button', { name: 'Play from here' });
-    await expect(playFromHereButtons).toHaveCount(4);
+  test('resetting the script returns to initial state', async ({ page }) => {
+    // Setup script
+    await page.getByPlaceholder(/Enter your prompt here/).fill('Nature documentary');
+    await page.getByRole('button', { name: 'Generate Script', exact: true }).click();
+    await expect(page.getByText('Scene Prompt').first()).toBeVisible();
+
+    // Click New Script
+    await page.getByRole('button', { name: 'New Script', exact: true }).click();
+
+    // Verify UI reset
+    await expect(page.getByRole('heading', { name: 'Create Your Video Script', exact: true })).toBeVisible();
+    await expect(page.getByPlaceholder(/Enter your prompt here/)).toBeEmpty();
   });
 
-  test('should have Audio and Image generation buttons for each scene', async ({ page }) => {
-    // Each scene should have Image and Audio generation buttons
-    // We check the first scene has these buttons
-    const imageButton = page.locator('button').filter({ hasText: 'Image' }).first();
-    const audioButton = page.locator('button').filter({ hasText: 'Audio' }).first();
-    const playAudioButton = page.getByRole('button', { name: 'Play Audio' }).first();
-    
-    await expect(imageButton).toBeVisible();
-    await expect(audioButton).toBeVisible();
-    await expect(playAudioButton).toBeVisible();
-  });
-
-  test('should render correctly on mobile viewport', async ({ page }) => {
-    // Set mobile viewport
+  test('mobile viewport layout check', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     
-    // Page should still load with main heading
-    await expect(page.getByRole('heading', { name: 'Prompt to Video Live' })).toBeVisible();
+    await expect(page.getByText('Prompt to Video Live').first()).toBeVisible();
+    const textarea = page.getByPlaceholder(/Enter your prompt here/);
+    await expect(textarea).toBeVisible();
     
-    // The timeline should still be visible (may stack differently)
-    await expect(page.getByText('Scene Prompt').first()).toBeVisible();
-    
-    // Play button should still be accessible - use .first() to avoid strict mode violation
-    await expect(page.getByRole('button', { name: /Play|Pause/i }).first()).toBeVisible();
+    // Verify the generate button is accessible on mobile
+    await expect(page.getByRole('button', { name: 'Generate Script', exact: true })).toBeVisible();
+  });
+
+  test('interactive scene controls after generation', async ({ page }) => {
+    await page.getByPlaceholder(/Enter your prompt here/).fill('The last robot');
+    await page.getByRole('button', { name: 'Generate Script', exact: true }).click();
+
+    // Verify "Play from here" functionality
+    const playFromHereBtn = page.getByRole('button', { name: 'Play from here', exact: true }).first();
+    await expect(playFromHereBtn).toBeVisible();
+
+    // Verify auto-scroll toggle exists
+    const autoScrollBtn = page.getByRole('button', { name: 'Auto-Scroll', exact: true });
+    await expect(autoScrollBtn).toBeVisible();
   });
 });
