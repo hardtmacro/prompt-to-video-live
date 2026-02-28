@@ -9,16 +9,16 @@ import {
 } from 'lucide-react';
 import { clsx } from 'clsx';
 
-// Voice configuration mapping
+// Voice configuration mapping — Deepgram Aura-2 voice names
 const VOICE_OPTIONS = [
-  { id: 'EN', label: 'English (US)', flag: '🇺🇸' },
-  { id: 'EN-US', label: 'English US', flag: '🇺🇸' },
-  { id: 'EN-BR', label: 'English British', flag: '🇬🇧' },
-  { id: 'ZH', label: 'Chinese', flag: '🇨🇳' },
-  { id: 'ES', label: 'Spanish', flag: '🇪🇸' },
-  { id: 'FR', label: 'French', flag: '🇫🇷' },
-  { id: 'JP', label: 'Japanese', flag: '🇯🇵' },
-  { id: 'KR', label: 'Korean', flag: '🇰🇷' },
+  { id: 'asteria-en', label: 'Asteria (Confident)', flag: '🎙️' },
+  { id: 'luna-en', label: 'Luna (Warm)', flag: '🌙' },
+  { id: 'zeus-en', label: 'Zeus (Authoritative)', flag: '⚡' },
+  { id: 'orion-en', label: 'Orion (Deep)', flag: '🌌' },
+  { id: 'aurora-en', label: 'Aurora (Bright)', flag: '✨' },
+  { id: 'hermes-en', label: 'Hermes (Smooth)', flag: '🪄' },
+  { id: 'athena-en', label: 'Athena (Professional)', flag: '🦉' },
+  { id: 'orpheus-en', label: 'Orpheus (Rich)', flag: '🎵' },
 ];
 
 interface Scene {
@@ -39,7 +39,7 @@ const DEFAULT_SCENES: Scene[] = [
     id: 1,
     prompt: "A futuristic city skyline at sunset with flying cars and neon lights",
     narration: "Welcome to the future, where cities float among the clouds and technology connects every soul.",
-    voiceId: 'EN-US',
+    voiceId: 'asteria-en',
     imageUrl: null,
     isGeneratingImage: false,
     isGeneratingAudio: false,
@@ -50,7 +50,7 @@ const DEFAULT_SCENES: Scene[] = [
     id: 2,
     prompt: "An astronaut floating in space with Earth visible in the background",
     narration: "In the vastness of space, humanity's journey continues, reaching for the stars.",
-    voiceId: 'EN-US', // Fixed to prevent strict mode violation on English (US) 🇺🇸 option
+    voiceId: 'zeus-en',
     imageUrl: null,
     isGeneratingImage: false,
     isGeneratingAudio: false,
@@ -61,7 +61,7 @@ const DEFAULT_SCENES: Scene[] = [
     id: 3,
     prompt: "A magical forest with glowing mushrooms and fireflies at night",
     narration: "Deep in the enchanted forests, ancient magic still whispers through the trees.",
-    voiceId: 'FR',
+    voiceId: 'luna-en',
     imageUrl: null,
     isGeneratingImage: false,
     isGeneratingAudio: false,
@@ -72,7 +72,7 @@ const DEFAULT_SCENES: Scene[] = [
     id: 4,
     prompt: "A samurai standing on a hilltop overlooking ancient Japan during cherry blossom season",
     narration: "In old Japan, honor and tradition shaped the destiny of warriors.",
-    voiceId: 'JP',
+    voiceId: 'orion-en',
     imageUrl: null,
     isGeneratingImage: false,
     isGeneratingAudio: false,
