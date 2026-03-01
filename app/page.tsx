@@ -145,11 +145,13 @@ export default function PromptToVideoLive() {
   }, []);
 
   const fetchTtsAudio = useCallback(async (text: string, voiceId: string): Promise<string> => {
-    console.log(`[TTS Fetch] Calling /api/text-to-speech with voiceId="${voiceId}"`);
+    const voiceOption = VOICE_OPTIONS.find(v => v.id === voiceId);
+    const speaker = voiceOption ? voiceOption.label : voiceId.replace(/-en$/, '');
+    console.log(`[TTS Fetch] Calling /api/text-to-speech with voiceId="${voiceId}", speaker="${speaker}"`);
     const res = await fetch('/api/text-to-speech', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, voiceId }),
+      body: JSON.stringify({ text, voiceId, speaker }),
     });
     if (!res.ok) {
       const errorText = await res.text().catch(() => 'Unknown error');

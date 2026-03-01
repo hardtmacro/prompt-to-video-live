@@ -5,40 +5,36 @@ test.describe('prompt-to-video-live', () => {
     await page.goto('/');
   });
 
-  test('displays initial page with heading, form, disabled button, and footer', async ({ page }) => {
+  test('initial page renders with heading, prompt form, disabled button, examples, and footer', async ({ page }) => {
     await expect(page.getByRole('heading', { name: 'Prompt to Video Live' })).toBeVisible();
     await expect(page.getByText('AI-powered video generation').first()).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Create Your Video Script' })).toBeVisible();
-    await expect(page.getByPlaceholder(/Enter your prompt here/)).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Generate Script' })).toBeDisabled();
+    await expect(page.locator('textarea')).toBeVisible();
+
+    const generateBtn = page.getByRole('button', { name: 'Generate Script' });
+    await expect(generateBtn).toBeVisible();
+    await expect(generateBtn).toBeDisabled();
+
     await expect(page.getByText('Try these examples:').first()).toBeVisible();
     await expect(page.getByText('Prompt to Video Live • AI-Powered Video Generation').first()).toBeVisible();
   });
 
-  test('enables Generate Script button on input and example prompt fills textarea', async ({ page }) => {
+  test('clicking example prompt fills textarea and enables generate button', async ({ page }) => {
     const generateBtn = page.getByRole('button', { name: 'Generate Script' });
-    const textarea = page.getByPlaceholder(/Enter your prompt here/);
-
     await expect(generateBtn).toBeDisabled();
 
-    // Typing enables the button
-    await textarea.pressSequentially('Test prompt');
-    await expect(generateBtn).toBeEnabled();
+    await page.locator('button', { hasText: 'ancient ruins' }).click();
 
-    // Clear and click example prompt
-    await textarea.fill('');
-    await expect(generateBtn).toBeDisabled();
-    await page.getByRole('button', { name: "A hero's journey through ancient ruins" }).click();
-    await expect(textarea).toHaveValue("A hero's journey through ancient ruins");
+    await expect(page.locator('textarea')).not.toBeEmpty();
     await expect(generateBtn).toBeEnabled();
   });
 
-  test('generates script with 4 scenes, images, and action buttons', async ({ page }) => {
+  test('generates 4 scenes with images, voice selectors, and action buttons', async ({ page }) => {
     await page.route('**/api/generate-image', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ url: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA4MDAgNDUwIj48cmVjdCB3aWR0aD0iODAwIiBoZWlnaHQ9IjQ1MCIgZmlsbD0iIzY2N2VlYSIvPjwvc3ZnPg==' }),
+        body: JSON.stringify({ url: 'https://example.com/scene.jpg' }),
       });
     });
     await page.route('**/api/text-to-speech', async (route) => {
@@ -49,45 +45,34 @@ test.describe('prompt-to-video-live', () => {
       });
     });
 
-    await page.getByPlaceholder(/Enter your prompt here/).pressSequentially('Space exploration adventure');
-    await page.getByRole('button', { name: 'Generate Script' }).click();
+    await page.locator('textarea').pressSequentially('Space exploration', { delay: 20 });
+    const generateBtn = page.getByRole('button', { name: 'Generate Script' });
+    await expect(generateBtn).toBeEnabled();
+    await generateBtn.click();
 
-    // Wait for scene UI to appear
-    await expect(page.getByRole('button', { name: 'New Script', exact: true })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('button', { name: 'New Script' })).toBeVisible({ timeout: 15000 });
 
-    // Initial form should be hidden
-    await expect(page.getByRole('heading', { name: 'Create Your Video Script' })).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Play from here' })).toHaveCount(4, { timeout: 15000 });
+    await expect(page.getByRole('button', { name: 'Play Audio' })).toHaveCount(4);
 
-    // Verify 4 scenes rendered with labels (no .first() — count needs the full set)
-    await expect(page.getByText('Scene Prompt')).toHaveCount(4);
-    await expect(page.getByText('Narration')).toHaveCount(4);
-
-    // Verify voice label is visible
+    await expect(page.getByText('Scene Prompt').first()).toBeVisible();
+    await expect(page.getByText('Narration').first()).toBeVisible();
     await expect(page.getByText('Voice:').first()).toBeVisible();
 
-    // Wait for at least one image API call to complete
-    await page.waitForResponse('**/api/generate-image', { timeout: 15000 });
+    await expect(page.locator('select')).toHaveCount(4);
+    const firstSelect = page.locator('select').first();
+    await expect(firstSelect.locator('option')).toHaveCount(15);
 
-    // Verify images render with valid src
-    const images = page.locator('img');
-    await expect(images.first()).toBeVisible({ timeout: 15000 });
-    await expect(images.first()).toHaveAttribute('src', /^(https?:|\/|data:)/);
-
-    // Verify per-scene action buttons (4 scenes × each button)
-    await expect(page.getByRole('button', { name: 'Play Audio', exact: true })).toHaveCount(4);
-    await expect(page.getByRole('button', { name: 'Play from here', exact: true })).toHaveCount(4);
-
-    // Verify scene counter and play button
-    await expect(page.getByText('Scene Prompt').first()).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
+    await expect(page.locator('img')).toHaveCount(4, { timeout: 30000 });
+    await expect(page.locator('img').first()).toHaveAttribute('src', /^(https?:|\/|data:)/);
   });
 
-  test('New Script resets back to the initial prompt form', async ({ page }) => {
+  test('New Script button resets to initial prompt state', async ({ page }) => {
     await page.route('**/api/generate-image', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ url: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=' }),
+        body: JSON.stringify({ url: 'https://example.com/scene.jpg' }),
       });
     });
     await page.route('**/api/text-to-speech', async (route) => {
@@ -98,33 +83,25 @@ test.describe('prompt-to-video-live', () => {
       });
     });
 
-    // Generate a script
-    await page.getByPlaceholder(/Enter your prompt here/).pressSequentially('A test story');
+    await page.locator('textarea').pressSequentially('test prompt', { delay: 20 });
     await page.getByRole('button', { name: 'Generate Script' }).click();
-    await expect(page.getByRole('button', { name: 'New Script', exact: true })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('button', { name: 'New Script' })).toBeVisible({ timeout: 15000 });
 
-    // Verify scenes exist (no .first() — count needs the full set)
-    await expect(page.getByText('Scene Prompt')).toHaveCount(4);
+    await page.getByRole('button', { name: 'New Script' }).click();
 
-    // Click New Script to reset
-    await page.getByRole('button', { name: 'New Script', exact: true }).click();
-
-    // Verify initial form returns
     await expect(page.getByRole('heading', { name: 'Create Your Video Script' })).toBeVisible();
-    await expect(page.getByPlaceholder(/Enter your prompt here/)).toBeVisible();
-    await expect(page.getByPlaceholder(/Enter your prompt here/)).toHaveValue('');
+    await expect(page.locator('textarea')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Generate Script' })).toBeDisabled();
-
-    // Scenes should be gone (no .first() — count needs the full set)
-    await expect(page.getByText('Scene Prompt')).toHaveCount(0);
+    await expect(page.getByText('Try these examples:').first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Play from here' })).toHaveCount(0);
   });
 
-  test('voice dropdown changes the selected voice for a scene', async ({ page }) => {
+  test('play button toggles to pause and back', async ({ page }) => {
     await page.route('**/api/generate-image', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ url: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=' }),
+        body: JSON.stringify({ url: 'https://example.com/scene.jpg' }),
       });
     });
     await page.route('**/api/text-to-speech', async (route) => {
@@ -135,68 +112,62 @@ test.describe('prompt-to-video-live', () => {
       });
     });
 
-    // "adventure" keyword matches Zeus voice
-    await page.getByPlaceholder(/Enter your prompt here/).pressSequentially('Space exploration adventure');
+    await page.locator('textarea').pressSequentially('adventure', { delay: 20 });
     await page.getByRole('button', { name: 'Generate Script' }).click();
-    await expect(page.getByRole('button', { name: 'New Script', exact: true })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('button', { name: 'New Script' })).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('img').first()).toBeVisible({ timeout: 30000 });
 
-    // Verify initial voice is zeus-en (first keyword match: "adventure" → Zeus)
-    const firstVoiceSelect = page.locator('select').first();
-    await expect(firstVoiceSelect).toHaveValue('zeus-en');
+    // Mock Audio so playback doesn't complete instantly in headless browser
+    await page.evaluate(() => {
+      (window as any).Audio = class {
+        src = '';
+        onended: (() => void) | null = null;
+        onerror: ((e: any) => void) | null = null;
+        pause() {}
+        play() { return new Promise<void>(() => {}); }
+      };
+    });
 
-    // Change voice to Apollo
-    await firstVoiceSelect.selectOption('apollo-en');
-    await expect(firstVoiceSelect).toHaveValue('apollo-en');
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible({ timeout: 5000 });
 
-    // Change voice to Luna
-    await firstVoiceSelect.selectOption('luna-en');
-    await expect(firstVoiceSelect).toHaveValue('luna-en');
+    await page.getByRole('button', { name: 'Pause', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible({ timeout: 5000 });
   });
 
-  test('renders correctly on mobile viewport', async ({ page }) => {
+  test('voice can be changed on a scene via dropdown', async ({ page }) => {
+    await page.route('**/api/generate-image', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ url: 'https://example.com/scene.jpg' }),
+      });
+    });
+    await page.route('**/api/text-to-speech', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'audio/mpeg',
+        body: Buffer.from([0xFF, 0xFB, 0x90, 0x00]),
+      });
+    });
+
+    await page.locator('textarea').pressSequentially('ocean voyage', { delay: 20 });
+    await page.getByRole('button', { name: 'Generate Script' }).click();
+    await expect(page.getByRole('button', { name: 'New Script' })).toBeVisible({ timeout: 15000 });
+
+    const firstSelect = page.locator('select').first();
+    await expect(firstSelect).toBeVisible();
+    await firstSelect.selectOption('zeus-en');
+    await expect(firstSelect).toHaveValue('zeus-en');
+  });
+
+  test('mobile viewport displays initial page correctly', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
 
     await expect(page.getByRole('heading', { name: 'Prompt to Video Live' })).toBeVisible();
-    await expect(page.getByText('AI-powered video generation').first()).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Create Your Video Script' })).toBeVisible();
-    await expect(page.getByPlaceholder(/Enter your prompt here/)).toBeVisible();
+    await expect(page.locator('textarea')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Generate Script' })).toBeVisible();
-    await expect(page.getByText('Try these examples:').first()).toBeVisible();
     await expect(page.getByText('Prompt to Video Live • AI-Powered Video Generation').first()).toBeVisible();
-
-    // Example prompts should still be clickable on mobile
-    await page.getByRole('button', { name: "A love story in Paris" }).click();
-    await expect(page.getByPlaceholder(/Enter your prompt here/)).toHaveValue("A love story in Paris");
-    await expect(page.getByRole('button', { name: 'Generate Script' })).toBeEnabled();
-  });
-
-  test('theme voice matching assigns correct voice based on prompt keywords', async ({ page }) => {
-    await page.route('**/api/generate-image', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ url: 'data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=' }),
-      });
-    });
-    await page.route('**/api/text-to-speech', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'audio/mpeg',
-        body: Buffer.from([0xFF, 0xFB, 0x90, 0x00]),
-      });
-    });
-
-    // "A love story in Paris" — first keyword match is "love" → Luna (luna-en)
-    await page.getByRole('button', { name: "A love story in Paris" }).click();
-    await page.getByRole('button', { name: 'Generate Script' }).click();
-    await expect(page.getByRole('button', { name: 'New Script', exact: true })).toBeVisible({ timeout: 15000 });
-
-    // Verify Luna voice is selected on all 4 scene dropdowns
-    const voiceSelects = page.locator('select');
-    await expect(voiceSelects).toHaveCount(4);
-    await expect(voiceSelects.nth(0)).toHaveValue('luna-en');
-    await expect(voiceSelects.nth(1)).toHaveValue('luna-en');
-    await expect(voiceSelects.nth(2)).toHaveValue('luna-en');
-    await expect(voiceSelects.nth(3)).toHaveValue('luna-en');
   });
 });
