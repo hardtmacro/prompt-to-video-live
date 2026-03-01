@@ -1,476 +1,595 @@
-'use client';
+'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Play, Pause, RefreshCw, Volume2, VolumeX, 
-  ChevronDown, ChevronRight, Image as ImageIcon,
-  Wand2, AlertCircle, CheckCircle2, Loader2,
-  Sparkles, BookOpen
-} from 'lucide-react';
-import { clsx } from 'clsx';
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  Play,
+  Pause,
+  SkipForward,
+  SkipBack,
+  Wand2,
+  Volume2,
+  Loader2,
+  Film,
+  ImageIcon,
+  ChevronDown,
+  RefreshCw,
+  Sparkles,
+} from 'lucide-react'
+import clsx from 'clsx'
+import Image from 'next/image'
 
 const VOICE_OPTIONS = [
-  { id: 'apollo-en', label: 'Apollo', flag: '☀️' },
-  { id: 'arcas-en', label: 'Arcas', flag: '🐻' },
-  { id: 'asteria-en', label: 'Asteria', flag: '🎙️' },
-  { id: 'athena-en', label: 'Athena', flag: '🦉' },
-  { id: 'aurora-en', label: 'Aurora', flag: '✨' },
-  { id: 'draco-en', label: 'Draco', flag: '🐉' },
-  { id: 'hera-en', label: 'Hera', flag: '👸' },
-  { id: 'hermes-en', label: 'Hermes', flag: '🪄' },
-  { id: 'iris-en', label: 'Iris', flag: '🌈' },
-  { id: 'luna-en', label: 'Luna', flag: '🌙' },
-  { id: 'orion-en', label: 'Orion', flag: '🌌' },
-  { id: 'orpheus-en', label: 'Orpheus', flag: '🎵' },
-  { id: 'pandora-en', label: 'Pandora', flag: '📦' },
-  { id: 'phoebe-en', label: 'Phoebe', flag: '🌓' },
-  { id: 'zeus-en', label: 'Zeus', flag: '⚡' },
-];
+  { id: 'asteria-en', label: 'Asteria', gender: 'F' },
+  { id: 'luna-en', label: 'Luna', gender: 'F' },
+  { id: 'stella-en', label: 'Stella', gender: 'F' },
+  { id: 'athena-en', label: 'Athena', gender: 'F' },
+  { id: 'hera-en', label: 'Hera', gender: 'F' },
+  { id: 'orion-en', label: 'Orion', gender: 'M' },
+  { id: 'arcas-en', label: 'Arcas', gender: 'M' },
+  { id: 'perseus-en', label: 'Perseus', gender: 'M' },
+  { id: 'angus-en', label: 'Angus', gender: 'M' },
+  { id: 'orpheus-en', label: 'Orpheus', gender: 'M' },
+  { id: 'helios-en', label: 'Helios', gender: 'M' },
+  { id: 'zeus-en', label: 'Zeus', gender: 'M' },
+  { id: 'apollo-en', label: 'Apollo', gender: 'M' },
+  { id: 'hermes-en', label: 'Hermes', gender: 'M' },
+]
 
-const THEME_VOICES: Record<string, { voice: string; voiceLabel: string }> = {
-  'adventure': { voice: 'zeus-en', voiceLabel: 'adventure' },
-  'love': { voice: 'luna-en', voiceLabel: 'romance' },
-  'romance': { voice: 'luna-en', voiceLabel: 'romance' },
-  'mystery': { voice: 'orpheus-en', voiceLabel: 'mystery' },
-  'sci-fi': { voice: 'asteria-en', voiceLabel: 'sci-fi' },
-  'scifi': { voice: 'asteria-en', voiceLabel: 'sci-fi' },
-  'fantasy': { voice: 'hermes-en', voiceLabel: 'fantasy' },
-  'magical': { voice: 'hermes-en', voiceLabel: 'fantasy' },
-  'history': { voice: 'orion-en', voiceLabel: 'historical' },
-  'historical': { voice: 'orion-en', voiceLabel: 'historical' },
-  'nature': { voice: 'aurora-en', voiceLabel: 'nature' },
-  'technology': { voice: 'athena-en', voiceLabel: 'tech' },
-  'tech': { voice: 'athena-en', voiceLabel: 'tech' },
-  'hero': { voice: 'zeus-en', voiceLabel: 'heroic' },
-  'space': { voice: 'orion-en', voiceLabel: 'space' },
-  'robot': { voice: 'athena-en', voiceLabel: 'tech' },
-  'paris': { voice: 'luna-en', voiceLabel: 'romance' },
-  'ancient': { voice: 'orion-en', voiceLabel: 'historical' },
-  'ruins': { voice: 'orpheus-en', voiceLabel: 'mystery' },
-  'forest': { voice: 'aurora-en', voiceLabel: 'nature' },
-  'ocean': { voice: 'iris-en', voiceLabel: 'ocean' },
-  'sea': { voice: 'iris-en', voiceLabel: 'ocean' },
-  'war': { voice: 'zeus-en', voiceLabel: 'war' },
-  'battle': { voice: 'zeus-en', voiceLabel: 'war' },
-  'journey': { voice: 'arcas-en', voiceLabel: 'journey' },
-  'drama': { voice: 'hera-en', voiceLabel: 'drama' },
-  'music': { voice: 'orpheus-en', voiceLabel: 'music' },
-  'sun': { voice: 'apollo-en', voiceLabel: 'solar' },
-  'night': { voice: 'phoebe-en', voiceLabel: 'nocturnal' },
-  'dark': { voice: 'draco-en', voiceLabel: 'dark' },
-};
+const THEMES = [
+  { name: 'Epic Fantasy', voice: 'zeus-en', style: 'cinematic fantasy landscape' },
+  { name: 'Sci-Fi', voice: 'orion-en', style: 'futuristic sci-fi scene' },
+  { name: 'Horror', voice: 'orpheus-en', style: 'dark atmospheric horror' },
+  { name: 'Romance', voice: 'luna-en', style: 'romantic soft lighting' },
+  { name: 'Adventure', voice: 'perseus-en', style: 'adventure dramatic landscape' },
+  { name: 'Mystery', voice: 'athena-en', style: 'mysterious noir atmosphere' },
+]
 
 interface Scene {
-  id: number;
-  prompt: string;
-  narration: string;
-  voiceId: string;
-  imageUrl: string | null;
-  isGeneratingImage: boolean;
-  isGeneratingAudio: boolean;
-  imageError: boolean;
-  audioError: boolean;
-  audioUrl?: string;
+  id: number
+  narration: string
+  imagePrompt: string
+  imageUrl: string | null
+  audioUrl: string | null
+  voiceId: string
+  isGeneratingImage: boolean
+  isGeneratingAudio: boolean
 }
 
-const getMatchingThemeVoice = (prompt: string): { voice: string; voiceLabel: string } => {
-  const promptLower = prompt.toLowerCase();
-  for (const [keyword, theme] of Object.entries(THEME_VOICES)) {
-    if (promptLower.includes(keyword)) return theme;
+function hashCode(str: string): number {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i)
+    hash = ((hash << 5) - hash) + char
+    hash |= 0
   }
-  return { voice: 'luna-en', voiceLabel: 'story' };
-};
+  return Math.abs(hash)
+}
 
-const generateSceneImageSvg = (prompt: string, sceneIndex: number): string => {
-  const colors = [
-    ['#667eea', '#764ba2'], ['#f093fb', '#f5576c'], ['#4facfe', '#00f2fe'],
-    ['#43e97b', '#38f9d7'], ['#fa709a', '#fee140'], ['#a8edea', '#fed6e3'],
-    ['#ff9a9e', '#fecfef'], ['#ffecd2', '#fcb69f'], ['#ff6b6b', '#556270'],
-    ['#4bc0c8', '#c779d0'],
-  ];
-  const colorPair = colors[sceneIndex % colors.length];
-  const promptHash = prompt.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  const patternType = promptHash % 4;
-  let patternSvg = '';
-  if (patternType === 0) {
-    patternSvg = `<defs><radialGradient id="grad${sceneIndex}" cx="50%" cy="50%" r="50%"><stop offset="0%" style="stop-color:${colorPair[0]};stop-opacity:1" /><stop offset="100%" style="stop-color:${colorPair[1]};stop-opacity:1" /></radialGradient></defs><rect width="800" height="450" fill="url(#grad${sceneIndex})"/><circle cx="${200 + (promptHash % 300)}" cy="${150 + (promptHash % 150)}" r="${50 + (promptHash % 100)}" fill="rgba(255,255,255,0.1)"/>`;
-  } else if (patternType === 1) {
-    patternSvg = `<defs><linearGradient id="grad${sceneIndex}" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:${colorPair[0]};stop-opacity:1" /><stop offset="100%" style="stop-color:${colorPair[1]};stop-opacity:1" /></linearGradient></defs><rect width="800" height="450" fill="url(#grad${sceneIndex})"/>`;
-  } else if (patternType === 2) {
-    patternSvg = `<defs><linearGradient id="grad${sceneIndex}" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:${colorPair[0]};stop-opacity:1" /><stop offset="100%" style="stop-color:${colorPair[1]};stop-opacity:1" /></linearGradient></defs><rect width="800" height="450" fill="url(#grad${sceneIndex})"/>`;
-  } else {
-    patternSvg = `<defs><radialGradient id="grad${sceneIndex}" cx="30%" cy="30%" r="70%"><stop offset="0%" style="stop-color:${colorPair[0]};stop-opacity:1" /><stop offset="100%" style="stop-color:${colorPair[1]};stop-opacity:1" /></radialGradient></defs><rect width="800" height="450" fill="url(#grad${sceneIndex})"/>`;
-  }
-  patternSvg += `<text x="400" y="400" font-family="system-ui, sans-serif" font-size="24" fill="rgba(255,255,255,0.8)" text-anchor="middle">Scene ${sceneIndex + 1}</text>`;
-  return `data:image/svg+xml;base64,${btoa(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450">${patternSvg}</svg>`)}`;
-};
+function detectTheme(prompt: string): typeof THEMES[0] {
+  const lower = prompt.toLowerCase()
+  if (/fantasy|dragon|wizard|magic|sword|quest/.test(lower)) return THEMES[0]
+  if (/space|future|robot|cyber|alien|tech/.test(lower)) return THEMES[1]
+  if (/horror|dark|ghost|haunted|fear|dead/.test(lower)) return THEMES[2]
+  if (/love|romance|heart|kiss|passion/.test(lower)) return THEMES[3]
+  if (/adventure|journey|explore|treasure|hero/.test(lower)) return THEMES[4]
+  if (/mystery|detective|clue|secret|shadow/.test(lower)) return THEMES[5]
+  return THEMES[0]
+}
 
-export default function PromptToVideoLive() {
-  const [scenes, setScenes] = useState<Scene[]>([]);
-  const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [autoScroll, setAutoScroll] = useState(true);
-  const [generatingAll, setGeneratingAll] = useState(false);
-  const [currentAudioUrl, setCurrentAudioUrl] = useState<string | null>(null);
-  const [mainPrompt, setMainPrompt] = useState('');
-  const [isGeneratingScript, setIsGeneratingScript] = useState(false);
-  const [scriptGenerated, setScriptGenerated] = useState(false);
+function generateScenesFromPrompt(prompt: string): Scene[] {
+  const theme = detectTheme(prompt)
+  const h = hashCode(prompt)
+  const offsets = [0, 5, 11, 7]
 
-  const sceneRefs = useRef<Map<number, HTMLDivElement>>(new Map());
-  const containerRef = useRef<HTMLDivElement>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const isPlayingRef = useRef(false);
-  const scenesRef = useRef<Scene[]>([]);
+  const sceneTemplates = [
+    {
+      narration: `In a world shaped by "${prompt}", our story begins. The stage is set for something extraordinary.`,
+      imagePrompt: `${theme.style}, opening scene, ${prompt}, wide establishing shot, dramatic lighting, 4k cinematic`,
+    },
+    {
+      narration: `The journey deepens. Characters emerge from the shadows, driven by purpose and destiny.`,
+      imagePrompt: `${theme.style}, character introduction scene, ${prompt}, medium shot, detailed, atmospheric, 4k cinematic`,
+    },
+    {
+      narration: `Tension rises as forces collide. Every choice matters, every moment counts.`,
+      imagePrompt: `${theme.style}, climactic confrontation, ${prompt}, dramatic angle, intense lighting, 4k cinematic`,
+    },
+    {
+      narration: `And so the tale reaches its crescendo. What was begun must now find its end.`,
+      imagePrompt: `${theme.style}, epic finale scene, ${prompt}, sweeping vista, golden hour lighting, 4k cinematic`,
+    },
+  ]
 
-  useEffect(() => { scenesRef.current = scenes; }, [scenes]);
-  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+  return sceneTemplates.map((tpl, i) => ({
+    id: i,
+    narration: tpl.narration,
+    imagePrompt: tpl.imagePrompt,
+    imageUrl: null,
+    audioUrl: null,
+    voiceId: i === 0 ? theme.voice : VOICE_OPTIONS[(h + offsets[i]) % VOICE_OPTIONS.length].id,
+    isGeneratingImage: false,
+    isGeneratingAudio: false,
+  }))
+}
+
+export default function PromptToVideoPage() {
+  const [prompt, setPrompt] = useState('')
+  const [scenes, setScenes] = useState<Scene[]>([])
+  const scenesRef = useRef<Scene[]>([])
+  const [currentSceneIndex, setCurrentSceneIndex] = useState(0)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [hasGenerated, setHasGenerated] = useState(false)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    if (autoScroll && isPlaying) {
-      const el = sceneRefs.current.get(scenes[currentSceneIndex]?.id);
-      if (el && containerRef.current) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  }, [currentSceneIndex, autoScroll, isPlaying, scenes]);
+    setMounted(true)
+  }, [])
 
-  const playAudioUrl = useCallback((url: string): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-      const audio = new Audio(url);
-      audioRef.current = audio;
-      audio.onended = () => resolve();
-      audio.onerror = (e) => reject(e);
-      audio.play().catch(reject);
-    });
-  }, []);
+  useEffect(() => {
+    scenesRef.current = scenes
+  }, [scenes])
 
-  const fetchTtsAudio = useCallback(async (text: string, voiceId: string): Promise<string> => {
-    const voiceOption = VOICE_OPTIONS.find(v => v.id === voiceId);
-    const speaker = voiceOption ? voiceOption.label : voiceId.replace(/-en$/, '');
-    console.log(`[TTS Fetch] Calling /api/text-to-speech with voiceId="${voiceId}", speaker="${speaker}"`);
-    const res = await fetch('/api/text-to-speech', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, voiceId, speaker }),
-    });
-    if (!res.ok) {
-      const errorText = await res.text().catch(() => 'Unknown error');
-      throw new Error(`TTS API error ${res.status}: ${errorText}`);
-    }
-    const blob = await res.blob();
-    return URL.createObjectURL(blob);
-  }, []);
+  const updateScene = useCallback((index: number, updates: Partial<Scene>) => {
+    setScenes(prev => {
+      const next = prev.map((s, i) => (i === index ? { ...s, ...updates } : s))
+      scenesRef.current = next
+      return next
+    })
+  }, [])
 
-  const generateScenesFromPrompt = (prompt: string, matchedTheme: { voice: string; voiceLabel: string }): Scene[] => {
-    const storyArcs = [
-      { type: 'opening', template: { prompt: `${prompt} - establishing shot, wide cinematic view, dramatic lighting`, narration: `Welcome to ${prompt}. This is where our journey begins, in a world where every moment holds wonder and possibility.`, voiceId: matchedTheme.voice } },
-      { type: 'rising', template: { prompt: `${prompt} - action moment, dynamic composition, intense atmosphere`, narration: `As the story unfolds, we discover the true essence of this ${matchedTheme.voiceLabel}. Every detail reveals a deeper meaning.`, voiceId: matchedTheme.voice } },
-      { type: 'climax', template: { prompt: `${prompt} - dramatic peak moment, powerful visuals, emotional intensity`, narration: `At this pivotal moment, everything changes. The stakes are highest, and the journey reaches its dramatic peak.`, voiceId: matchedTheme.voice } },
-      { type: 'resolution', template: { prompt: `${prompt} - peaceful conclusion, warm lighting, satisfying ending`, narration: `And so our tale comes to a peaceful close, leaving us with memories that will last forever.`, voiceId: matchedTheme.voice } },
-    ];
-    return storyArcs.map((arc, index) => ({
-      id: index + 1, prompt: arc.template.prompt, narration: arc.template.narration,
-      voiceId: arc.template.voiceId, imageUrl: null, isGeneratingImage: false,
-      isGeneratingAudio: false, imageError: false, audioError: false,
-    }));
-  };
-
-  const generateSceneImage = async (index: number) => {
-    const scene = scenesRef.current[index];
-    if (!scene) return;
-    setScenes(prev => prev.map((s, i) => i === index ? { ...s, isGeneratingImage: true, imageError: false } : s));
+  const generateSceneImage = useCallback(async (scene: Scene, index: number) => {
+    updateScene(index, { isGeneratingImage: true })
     try {
-      console.log(`[Image] Calling /api/generate-image for scene ${index + 1}`);
-      const res = await fetch('/api/generate-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: scene.prompt }) });
-      if (!res.ok) throw new Error(`Image API error ${res.status}`);
-      const data = await res.json();
-      const imageUrl = data.url || data.imageUrl;
-      if (!imageUrl) throw new Error('No image URL in response');
-      setScenes(prev => prev.map((s, i) => i === index ? { ...s, imageUrl, isGeneratingImage: false } : s));
-    } catch (error) {
-      console.error('Image generation error, using SVG fallback:', error);
-      const svgDataUrl = generateSceneImageSvg(scene.prompt, index);
-      setScenes(prev => prev.map((s, i) => i === index ? { ...s, imageUrl: svgDataUrl, isGeneratingImage: false } : s));
+      const res = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: scene.imagePrompt }),
+      })
+      if (!res.ok) throw new Error('Image generation failed')
+      const data = await res.json()
+      updateScene(index, { imageUrl: data.url, isGeneratingImage: false })
+    } catch {
+      updateScene(index, { isGeneratingImage: false })
     }
-  };
+  }, [updateScene])
 
-  const generateSceneAudio = async (index: number) => {
-    const scene = scenesRef.current[index];
-    if (!scene) return;
-    setScenes(prev => prev.map((s, i) => i === index ? { ...s, isGeneratingAudio: true, audioError: false } : s));
+  const generateSceneAudio = useCallback(async (index: number): Promise<string | null> => {
+    const current = scenesRef.current[index]
+    if (!current) return null
+    updateScene(index, { isGeneratingAudio: true })
     try {
-      console.log(`[Audio Gen] Scene ${index + 1}: Calling /api/text-to-speech with voiceId="${scene.voiceId}"`);
-      const audioUrl = await fetchTtsAudio(scene.narration, scene.voiceId);
-      setScenes(prev => prev.map((s, i) => i === index ? { ...s, isGeneratingAudio: false, audioUrl } : s));
-    } catch (error) {
-      console.error('Audio generation error:', error);
-      setScenes(prev => prev.map((s, i) => i === index ? { ...s, isGeneratingAudio: false, audioError: true } : s));
+      const res = await fetch('/api/text-to-speech', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: current.narration, voiceId: current.voiceId }),
+      })
+      if (!res.ok) throw new Error('TTS failed')
+      const blob = await res.blob()
+      const audioUrl = URL.createObjectURL(blob)
+      updateScene(index, { audioUrl, isGeneratingAudio: false })
+      return audioUrl
+    } catch {
+      updateScene(index, { isGeneratingAudio: false })
+      return null
     }
-  };
+  }, [updateScene])
 
-  const generateScript = async () => {
-    if (!mainPrompt.trim()) return;
-    setIsGeneratingScript(true);
+  const handleGenerate = useCallback(async () => {
+    if (!prompt.trim() || isGenerating) return
+    setIsGenerating(true)
+    setIsPlaying(false)
+    setCurrentSceneIndex(0)
 
-    let generatedScenes: Scene[] = [];
-    try {
-      const matchedTheme = getMatchingThemeVoice(mainPrompt);
-      generatedScenes = generateScenesFromPrompt(mainPrompt, matchedTheme);
-      setScenes(generatedScenes);
-      scenesRef.current = generatedScenes;
-      setScriptGenerated(true);
-      setCurrentSceneIndex(0);
-    } catch (error) {
-      console.error('Script generation error:', error);
-      const matchedTheme = getMatchingThemeVoice(mainPrompt);
-      generatedScenes = generateScenesFromPrompt(mainPrompt, matchedTheme);
-      setScenes(generatedScenes);
-      scenesRef.current = generatedScenes;
-      setScriptGenerated(true);
-      setCurrentSceneIndex(0);
-    } finally {
-      setIsGeneratingScript(false);
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
     }
 
-    if (generatedScenes.length > 0) {
-      setGeneratingAll(true);
-      try {
-        for (let i = 0; i < generatedScenes.length; i++) {
-          await generateSceneImage(i);
-          await generateSceneAudio(i);
-        }
-      } catch (error) {
-        console.error('Asset generation error:', error);
-      } finally {
-        setGeneratingAll(false);
+    const newScenes = generateScenesFromPrompt(prompt)
+    setScenes(newScenes)
+    scenesRef.current = newScenes
+    setHasGenerated(true)
+
+    const imagePromises = newScenes.map((scene, i) => generateSceneImage(scene, i))
+    const audioPromises = newScenes.map((_, i) => {
+      scenesRef.current = newScenes
+      return generateSceneAudio(i)
+    })
+
+    await Promise.allSettled([...imagePromises, ...audioPromises])
+    setIsGenerating(false)
+  }, [prompt, isGenerating, generateSceneImage, generateSceneAudio])
+
+  const playSceneAudio = useCallback(async (index: number) => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
+    }
+
+    const scene = scenesRef.current[index]
+    if (!scene) return
+
+    let url: string | null = scene.audioUrl
+    if (!url) {
+      url = await generateSceneAudio(index)
+    }
+    if (!url) return
+
+    const audio = new Audio(url)
+    audioRef.current = audio
+
+    audio.onended = () => {
+      const nextIndex = index + 1
+      if (nextIndex < scenesRef.current.length && isPlaying) {
+        setCurrentSceneIndex(nextIndex)
+        playSceneAudio(nextIndex)
+      } else {
+        setIsPlaying(false)
       }
     }
-  };
 
-  const resetScript = () => {
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-    setScenes([]); scenesRef.current = [];
-    setScriptGenerated(false); setMainPrompt('');
-    setCurrentSceneIndex(0); setIsPlaying(false); isPlayingRef.current = false;
-  };
+    try {
+      await audio.play()
+    } catch {
+      setIsPlaying(false)
+    }
+  }, [isPlaying, generateSceneAudio])
 
-  const playNextScene = useCallback(async (index: number) => {
-    if (!isPlayingRef.current) { setIsPlaying(false); return; }
-    const currentScenes = scenesRef.current;
-    if (index >= currentScenes.length) { setIsPlaying(false); isPlayingRef.current = false; return; }
-    setCurrentSceneIndex(index);
-    const scene = currentScenes[index];
-    if (!scene) return;
-    let audioUrl = scene.audioUrl;
-    if (!audioUrl) {
-      try {
-        audioUrl = await fetchTtsAudio(scene.narration, scene.voiceId);
-        setScenes(prev => prev.map((s, i) => i === index ? { ...s, audioUrl } : s));
-      } catch (error) {
-        console.error(`[Playback] TTS error for scene ${index + 1}:`, error);
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        if (isPlayingRef.current) await playNextScene(index + 1);
-        return;
+  const handlePlay = useCallback(() => {
+    if (scenes.length === 0) return
+    setIsPlaying(true)
+    playSceneAudio(currentSceneIndex)
+  }, [scenes.length, currentSceneIndex, playSceneAudio])
+
+  const handlePause = useCallback(() => {
+    setIsPlaying(false)
+    if (audioRef.current) {
+      audioRef.current.pause()
+    }
+  }, [])
+
+  const handleNext = useCallback(() => {
+    if (currentSceneIndex < scenes.length - 1) {
+      const next = currentSceneIndex + 1
+      setCurrentSceneIndex(next)
+      if (isPlaying) {
+        playSceneAudio(next)
       }
     }
-    if (audioUrl) {
-      try { await playAudioUrl(audioUrl); } catch (error) { console.error(`[Playback] Audio play error:`, error); }
-    }
-    if (isPlayingRef.current) await playNextScene(index + 1);
-  }, [fetchTtsAudio, playAudioUrl]);
+  }, [currentSceneIndex, scenes.length, isPlaying, playSceneAudio])
 
-  const togglePlay = async () => {
-    if (isPlaying) {
-      setIsPlaying(false); isPlayingRef.current = false;
-      if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-    } else {
-      const currentScene = scenesRef.current[currentSceneIndex];
-      if (currentScene && !currentScene.imageUrl && !currentScene.isGeneratingImage) {
-        await generateSceneImage(currentSceneIndex);
+  const handlePrev = useCallback(() => {
+    if (currentSceneIndex > 0) {
+      const prev = currentSceneIndex - 1
+      setCurrentSceneIndex(prev)
+      if (isPlaying) {
+        playSceneAudio(prev)
       }
-      setIsPlaying(true); isPlayingRef.current = true;
-      playNextScene(currentSceneIndex);
     }
-  };
+  }, [currentSceneIndex, isPlaying, playSceneAudio])
 
-  const playSceneAudio = async (index: number) => {
-    const scene = scenesRef.current[index];
-    if (!scene) return;
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-    let audioUrl = scene.audioUrl;
-    if (!audioUrl) {
-      try {
-        audioUrl = await fetchTtsAudio(scene.narration, scene.voiceId);
-        setScenes(prev => prev.map((s, i) => i === index ? { ...s, audioUrl } : s));
-      } catch (error) { console.error('Error fetching TTS:', error); return; }
-    }
-    try { await playAudioUrl(audioUrl); } catch (error) { console.error('Error playing audio:', error); }
-  };
+  const handleVoiceChange = useCallback((index: number, voiceId: string) => {
+    updateScene(index, { voiceId, audioUrl: null })
+  }, [updateScene])
 
-  const generateAllScenes = async () => {
-    setGeneratingAll(true);
-    for (let i = 0; i < scenesRef.current.length; i++) {
-      await generateSceneImage(i);
-      await generateSceneAudio(i);
-    }
-    setGeneratingAll(false);
-  };
+  const handleRegenerateAudio = useCallback(async (index: number) => {
+    updateScene(index, { audioUrl: null })
+    await generateSceneAudio(index)
+  }, [updateScene, generateSceneAudio])
 
-  const updateScene = (index: number, updates: Partial<Scene>) => {
-    setScenes(prev => prev.map((s, i) => i === index ? { ...s, ...updates } : s));
-  };
+  const currentScene = scenes[currentSceneIndex] || null
 
-  const skipToScene = (index: number) => {
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-    setCurrentSceneIndex(index); setIsPlaying(true); isPlayingRef.current = true;
-    playNextScene(index);
-  };
-
-  useEffect(() => { return () => { if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; } }; }, []);
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white">
-      <motion.header initial={{ y: -100 }} animate={{ y: 0 }} className="sticky top-0 z-50 border-b border-neutral-800 bg-neutral-950/80 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center">
-              <Wand2 className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-violet-400 to-indigo-400 bg-clip-text text-transparent">Prompt to Video Live</h1>
-              <p className="text-xs text-neutral-500">AI-powered video generation</p>
-            </div>
-          </div>
-          {scriptGenerated && (
-            <div className="flex items-center gap-3">
-              <button onClick={() => setAutoScroll(!autoScroll)} className={clsx("px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2", autoScroll ? "bg-violet-600/20 text-violet-400 border border-violet-600/30" : "bg-neutral-800 text-neutral-400 border border-neutral-700")}>
-                {autoScroll ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />} Auto-Scroll
-              </button>
-              <button onClick={generateAllScenes} disabled={generatingAll} className="px-4 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-medium text-sm hover:from-violet-500 hover:to-indigo-500 transition-all disabled:opacity-50 flex items-center gap-2">
-                {generatingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />} Generate All
-              </button>
-            </div>
-          )}
+      {/* Header */}
+      <header className="border-b border-neutral-800 px-6 py-4">
+        <div className="max-w-7xl mx-auto flex items-center gap-3">
+          <Film className="w-7 h-7 text-purple-500" />
+          <h1 className="text-xl font-bold tracking-tight">Prompt to Video</h1>
+          <span className="text-xs text-neutral-500 bg-neutral-800 px-2 py-0.5 rounded-full ml-2">
+            LIVE
+          </span>
         </div>
-      </motion.header>
+      </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        {!scriptGenerated && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8 p-6 rounded-2xl bg-neutral-900/50 border border-neutral-800">
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center"><Sparkles className="w-5 h-5 text-white" /></div>
-                <div>
-                  <h2 className="text-lg font-semibold text-white">Create Your Video Script</h2>
-                  <p className="text-sm text-neutral-400">Enter a prompt and we&apos;ll generate an engaging story with scenes</p>
+      <main className="max-w-7xl mx-auto px-6 py-8">
+        {/* Prompt Input */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8"
+        >
+          <label htmlFor="prompt-input" className="block text-sm font-medium text-neutral-400 mb-2">
+            Describe your video story
+          </label>
+          <div className="flex gap-3">
+            <input
+              id="prompt-input"
+              type="text"
+              value={prompt}
+              onChange={e => setPrompt(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleGenerate()}
+              placeholder="A dragon awakens in a forgotten kingdom..."
+              className="flex-1 bg-neutral-900 border border-neutral-700 rounded-xl px-4 py-3 text-white placeholder:text-neutral-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+            />
+            <button
+              onClick={handleGenerate}
+              disabled={!prompt.trim() || isGenerating}
+              className={clsx(
+                'flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all',
+                !prompt.trim() || isGenerating
+                  ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
+                  : 'bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-500/20'
+              )}
+            >
+              {isGenerating ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Wand2 className="w-5 h-5" />
+              )}
+              {isGenerating ? 'Generating...' : 'Generate'}
+            </button>
+          </div>
+        </motion.div>
+
+        <AnimatePresence mode="wait">
+          {hasGenerated && (
+            <motion.div
+              key="content"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.4 }}
+            >
+              {/* Video Preview */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                {/* Main Viewer */}
+                <div className="lg:col-span-2">
+                  <div className="relative aspect-video bg-neutral-900 rounded-2xl overflow-hidden border border-neutral-800">
+                    <AnimatePresence mode="wait">
+                      {currentScene && (
+                        <motion.div
+                          key={currentScene.id}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: 0.5 }}
+                          className="absolute inset-0"
+                        >
+                          {currentScene.isGeneratingImage ? (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-neutral-900">
+                              <Loader2 className="w-10 h-10 text-purple-500 animate-spin" />
+                              <p className="text-sm text-neutral-400">Generating image...</p>
+                            </div>
+                          ) : currentScene.imageUrl ? (
+                            <Image
+                              src={currentScene.imageUrl}
+                              alt={`Scene ${currentScene.id + 1}`}
+                              fill
+                              className="object-cover"
+                              unoptimized
+                            />
+                          ) : (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-neutral-900">
+                              <ImageIcon className="w-10 h-10 text-neutral-700" />
+                              <p className="text-sm text-neutral-500">No image yet</p>
+                            </div>
+                          )}
+
+                          {/* Narration Overlay */}
+                          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-6">
+                            <p className="text-sm md:text-base leading-relaxed text-neutral-200 drop-shadow-lg">
+                              {currentScene.narration}
+                            </p>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    {/* Scene Counter */}
+                    <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-medium">
+                      Scene {currentSceneIndex + 1} / {scenes.length}
+                    </div>
+                  </div>
+
+                  {/* Playback Controls */}
+                  <div className="flex items-center justify-center gap-4 mt-4">
+                    <button
+                      onClick={handlePrev}
+                      disabled={currentSceneIndex === 0}
+                      className={clsx(
+                        'p-2 rounded-lg transition-colors',
+                        currentSceneIndex === 0
+                          ? 'text-neutral-700 cursor-not-allowed'
+                          : 'text-neutral-300 hover:bg-neutral-800'
+                      )}
+                    >
+                      <SkipBack className="w-5 h-5" />
+                    </button>
+
+                    <button
+                      onClick={isPlaying ? handlePause : handlePlay}
+                      disabled={scenes.length === 0}
+                      className={clsx(
+                        'p-3 rounded-full transition-all',
+                        scenes.length === 0
+                          ? 'bg-neutral-800 text-neutral-600 cursor-not-allowed'
+                          : 'bg-purple-600 hover:bg-purple-500 text-white shadow-lg shadow-purple-500/30'
+                      )}
+                    >
+                      {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-0.5" />}
+                    </button>
+
+                    <button
+                      onClick={handleNext}
+                      disabled={currentSceneIndex >= scenes.length - 1}
+                      className={clsx(
+                        'p-2 rounded-lg transition-colors',
+                        currentSceneIndex >= scenes.length - 1
+                          ? 'text-neutral-700 cursor-not-allowed'
+                          : 'text-neutral-300 hover:bg-neutral-800'
+                      )}
+                    >
+                      <SkipForward className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="flex gap-1.5 mt-3">
+                    {scenes.map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          setCurrentSceneIndex(i)
+                          if (isPlaying) playSceneAudio(i)
+                        }}
+                        className={clsx(
+                          'flex-1 h-1.5 rounded-full transition-all',
+                          i === currentSceneIndex
+                            ? 'bg-purple-500'
+                            : i < currentSceneIndex
+                            ? 'bg-purple-500/40'
+                            : 'bg-neutral-800'
+                        )}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-3">
-                <textarea value={mainPrompt} onChange={(e) => setMainPrompt(e.target.value)} placeholder="Enter your prompt here... e.g., 'A hero's journey through ancient ruins'" className="w-full bg-neutral-800/50 border border-neutral-700 rounded-xl px-4 py-3 text-base resize-none focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500 placeholder:text-neutral-500" rows={3} />
-                <div className="flex items-center gap-3">
-                  <button onClick={generateScript} disabled={isGeneratingScript || !mainPrompt.trim()} className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-medium hover:from-violet-500 hover:to-indigo-500 transition-all disabled:opacity-50 flex items-center gap-2">
-                    {isGeneratingScript ? (<><Loader2 className="w-5 h-5 animate-spin" />Generating Script...</>) : (<><BookOpen className="w-5 h-5" />Generate Script</>)}
-                  </button>
-                  <p className="text-xs text-neutral-500">Your script will include 4 scenes with an engaging story arc.</p>
-                </div>
-              </div>
-              <div className="pt-2">
-                <p className="text-xs text-neutral-500 mb-2">Try these examples:</p>
-                <div className="flex flex-wrap gap-2">
-                  {["A hero's journey through ancient ruins", "The last robot on Earth", "A love story in Paris", "Space exploration adventure", "Magical forest discovery"].map((example) => (
-                    <button key={example} onClick={() => setMainPrompt(example)} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs text-neutral-300 transition-colors">{example}</button>
+
+                {/* Scene List */}
+                <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                  <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-2">
+                    Scenes
+                  </h2>
+                  {scenes.map((scene, i) => (
+                    <motion.div
+                      key={scene.id}
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.1 }}
+                      onClick={() => setCurrentSceneIndex(i)}
+                      className={clsx(
+                        'p-3 rounded-xl border cursor-pointer transition-all',
+                        i === currentSceneIndex
+                          ? 'border-purple-500 bg-purple-500/10'
+                          : 'border-neutral-800 bg-neutral-900 hover:border-neutral-700'
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="relative w-16 h-10 rounded-md overflow-hidden bg-neutral-800 flex-shrink-0">
+                          {scene.isGeneratingImage ? (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <Loader2 className="w-4 h-4 text-purple-400 animate-spin" />
+                            </div>
+                          ) : scene.imageUrl ? (
+                            <Image
+                              src={scene.imageUrl}
+                              alt={`Scene ${i + 1} thumbnail`}
+                              fill
+                              className="object-cover"
+                              unoptimized
+                            />
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <ImageIcon className="w-4 h-4 text-neutral-600" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-neutral-300 mb-1">
+                            Scene {i + 1}
+                          </p>
+                          <p className="text-xs text-neutral-500 line-clamp-2 leading-relaxed">
+                            {scene.narration}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Voice & Audio controls */}
+                      <div className="mt-2 flex items-center gap-2">
+                        <Volume2 className="w-3 h-3 text-neutral-500 flex-shrink-0" />
+                        <div className="relative flex-1">
+                          <select
+                            value={scene.voiceId}
+                            onChange={e => {
+                              e.stopPropagation()
+                              handleVoiceChange(i, e.target.value)
+                            }}
+                            onClick={e => e.stopPropagation()}
+                            className="w-full bg-neutral-800 border border-neutral-700 text-xs text-neutral-300 rounded-md px-2 py-1 pr-6 appearance-none focus:outline-none focus:ring-1 focus:ring-purple-500"
+                          >
+                            {VOICE_OPTIONS.map(v => (
+                              <option key={v.id} value={v.id}>
+                                {v.label} ({v.gender})
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-500 pointer-events-none" />
+                        </div>
+                        <button
+                          onClick={e => {
+                            e.stopPropagation()
+                            handleRegenerateAudio(i)
+                          }}
+                          disabled={scene.isGeneratingAudio}
+                          className={clsx(
+                            'p-1 rounded transition-colors flex-shrink-0',
+                            scene.isGeneratingAudio
+                              ? 'text-neutral-600 cursor-not-allowed'
+                              : 'text-neutral-400 hover:text-purple-400 hover:bg-neutral-800'
+                          )}
+                          title="Regenerate audio"
+                        >
+                          {scene.isGeneratingAudio ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <RefreshCw className="w-3 h-3" />
+                          )}
+                        </button>
+                        {scene.audioUrl && (
+                          <Sparkles className="w-3 h-3 text-green-500 flex-shrink-0" />
+                        )}
+                      </div>
+                    </motion.div>
                   ))}
                 </div>
               </div>
-            </div>
-          </motion.div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {scriptGenerated && scenes.length > 0 && (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8 p-4 rounded-2xl bg-neutral-900/50 border border-neutral-800">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <button onClick={togglePlay} aria-label={isPlaying ? "Pause" : "Play"} className={clsx("w-14 h-14 rounded-full flex items-center justify-center transition-all", isPlaying ? "bg-red-600 hover:bg-red-500" : "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500")}>
-                  {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-1" />}
-                </button>
-                <div>
-                  <p className="text-sm text-neutral-400">{isPlaying ? 'Playing...' : 'Ready to play'}</p>
-                  <p className="text-lg font-semibold">Scene {currentSceneIndex + 1} of {scenes.length}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className={clsx("px-3 py-1 rounded-full text-xs font-medium", autoScroll ? "bg-green-600/20 text-green-400" : "bg-neutral-800 text-neutral-500")}>{autoScroll ? 'Auto-scroll ON' : 'Auto-scroll OFF'}</span>
-                <button onClick={resetScript} className="px-3 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-sm font-medium transition-colors flex items-center gap-2"><RefreshCw className="w-4 h-4" />New Script</button>
-              </div>
+        {/* Empty State */}
+        {!hasGenerated && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.3 }}
+            className="flex flex-col items-center justify-center py-24 text-center"
+          >
+            <div className="w-20 h-20 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center mb-6">
+              <Film className="w-10 h-10 text-neutral-700" />
             </div>
+            <h2 className="text-lg font-semibold text-neutral-300 mb-2">
+              Create your video story
+            </h2>
+            <p className="text-sm text-neutral-500 max-w-md">
+              Enter a prompt above and we&apos;ll generate a multi-scene video with AI-generated
+              images and narration.
+            </p>
           </motion.div>
-        )}
-
-        {scriptGenerated && scenes.length > 0 && (
-          <div className="relative">
-            <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-neutral-800">
-              <motion.div className="w-full bg-gradient-to-b from-violet-600 to-indigo-600" style={{ height: `${((currentSceneIndex + 1) / scenes.length) * 100}%` }} animate={{ height: `${((currentSceneIndex + 1) / scenes.length) * 100}%` }} transition={{ duration: 0.3 }} />
-            </div>
-            <div ref={containerRef} className="space-y-6 pl-20">
-              <AnimatePresence>
-                {scenes.map((scene, index) => (
-                  <motion.div key={scene.id} ref={(el) => { if (el) sceneRefs.current.set(scene.id, el); }} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0, scale: currentSceneIndex === index ? 1.02 : 1 }} transition={{ delay: index * 0.1 }} className={clsx("relative p-6 rounded-2xl border transition-all duration-300", currentSceneIndex === index ? "bg-neutral-900/80 border-violet-600/50 shadow-lg shadow-violet-600/10" : "bg-neutral-900/30 border-neutral-800")}>
-                    <div className={clsx("absolute -left-14 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold", currentSceneIndex === index ? "bg-gradient-to-r from-violet-600 to-indigo-600" : "bg-neutral-800 text-neutral-500")}>{index + 1}</div>
-                    <div className="grid md:grid-cols-2 gap-6">
-                      <div className="aspect-video rounded-xl overflow-hidden bg-neutral-800 relative">
-                        {scene.isGeneratingImage ? (
-                          <div className="absolute inset-0 flex items-center justify-center bg-neutral-800"><div className="flex flex-col items-center gap-3"><Loader2 className="w-8 h-8 animate-spin text-violet-500" /><span className="text-sm text-neutral-400">Generating scene...</span></div></div>
-                        ) : scene.imageUrl ? (
-                          <img src={scene.imageUrl} alt={scene.prompt} className="w-full h-full object-cover" />
-                        ) : scene.imageError ? (
-                          <div className="absolute inset-0 flex items-center justify-center bg-red-900/20"><div className="flex flex-col items-center gap-2 text-red-400"><AlertCircle className="w-8 h-8" /><span className="text-sm">Failed to generate</span></div></div>
-                        ) : (
-                          <div className="absolute inset-0 flex items-center justify-center"><button onClick={() => generateSceneImage(index)} className="flex flex-col items-center gap-2 text-neutral-500 hover:text-violet-400 transition-colors"><ImageIcon className="w-8 h-8" /><span className="text-sm">Generate scene</span></button></div>
-                        )}
-                        {currentSceneIndex === index && isPlaying && (
-                          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 bg-violet-600/20 flex items-center justify-center"><div className="bg-black/60 px-4 py-2 rounded-full flex items-center gap-2"><span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" /><span className="text-sm font-medium">Now Playing</span></div></motion.div>
-                        )}
-                      </div>
-                      <div className="space-y-4">
-                        <div>
-                          <label className="text-xs text-neutral-500 uppercase tracking-wider font-medium">Scene Prompt</label>
-                          <textarea value={scene.prompt} onChange={(e) => updateScene(index, { prompt: e.target.value })} className="w-full mt-1 bg-neutral-800/50 border border-neutral-700 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:border-violet-500" rows={2} />
-                        </div>
-                        <div>
-                          <label className="text-xs text-neutral-500 uppercase tracking-wider font-medium flex items-center gap-2"><Volume2 className="w-3 h-3" />Narration</label>
-                          <textarea value={scene.narration} onChange={(e) => updateScene(index, { narration: e.target.value })} className="w-full mt-1 bg-neutral-800/50 border border-neutral-700 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:border-violet-500" rows={2} />
-                        </div>
-                        <div>
-                          <label className="text-xs text-neutral-500 uppercase tracking-wider font-medium flex items-center gap-2"><Volume2 className="w-3 h-3" />Voice: <span className="text-violet-400">{VOICE_OPTIONS.find(v => v.id === scene.voiceId)?.label || scene.voiceId}</span></label>
-                          <select value={scene.voiceId} onChange={(e) => { const newVoiceId = e.target.value; updateScene(index, { voiceId: newVoiceId, audioUrl: undefined }); }} className="w-full mt-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500 transition-colors bg-neutral-800/50 border-neutral-700 text-white">
-                            {VOICE_OPTIONS.map((voice) => (<option key={voice.id} value={voice.id} className="bg-neutral-900 text-white">{voice.label} {voice.flag}</option>))}
-                          </select>
-                        </div>
-                        <div className="flex items-center gap-2 pt-2">
-                          <button onClick={() => generateSceneImage(index)} disabled={scene.isGeneratingImage} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5">
-                            {scene.isGeneratingImage ? <Loader2 className="w-3 h-3 animate-spin" /> : <ImageIcon className="w-3 h-3" />} Image
-                          </button>
-                          <button onClick={() => generateSceneAudio(index)} disabled={scene.isGeneratingAudio} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5">
-                            {scene.isGeneratingAudio ? <Loader2 className="w-3 h-3 animate-spin" /> : scene.audioError ? <AlertCircle className="w-3 h-3 text-red-400" /> : scene.audioUrl ? <CheckCircle2 className="w-3 h-3 text-green-400" /> : <Volume2 className="w-3 h-3" />} Audio
-                          </button>
-                          <button onClick={() => playSceneAudio(index)} disabled={scene.isGeneratingAudio} className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5"><Volume2 className="w-3 h-3" />Play Audio</button>
-                          <button onClick={() => skipToScene(index)} className="px-3 py-1.5 rounded-lg bg-violet-600/20 hover:bg-violet-600/30 text-violet-400 text-xs font-medium transition-colors">Play from here</button>
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </div>
-          </div>
         )}
       </main>
-
-      <footer className="border-t border-neutral-800 mt-16 py-8">
-        <div className="max-w-7xl mx-auto px-4 text-center">
-          <p className="text-sm text-neutral-500">Prompt to Video Live • AI-Powered Video Generation</p>
-        </div>
-      </footer>
     </div>
-  );
+  )
 }
