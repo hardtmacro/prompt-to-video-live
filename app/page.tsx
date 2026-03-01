@@ -145,8 +145,8 @@ export default function PromptToVideoLive() {
   }, []);
 
   const fetchTtsAudio = useCallback(async (text: string, voiceId: string): Promise<string> => {
-    console.log(`[TTS Fetch] Calling /api/tts with voiceId="${voiceId}"`);
-    const res = await fetch('/api/tts', {
+    console.log(`[TTS Fetch] Calling /api/text-to-speech with voiceId="${voiceId}"`);
+    const res = await fetch('/api/text-to-speech', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, voiceId }),
@@ -178,8 +178,8 @@ export default function PromptToVideoLive() {
     if (!scene) return;
     setScenes(prev => prev.map((s, i) => i === index ? { ...s, isGeneratingImage: true, imageError: false } : s));
     try {
-      console.log(`[Image] Calling /api/image for scene ${index + 1}`);
-      const res = await fetch('/api/image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: scene.prompt }) });
+      console.log(`[Image] Calling /api/generate-image for scene ${index + 1}`);
+      const res = await fetch('/api/generate-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: scene.prompt }) });
       if (!res.ok) throw new Error(`Image API error ${res.status}`);
       const data = await res.json();
       const imageUrl = data.url || data.imageUrl;
@@ -197,7 +197,7 @@ export default function PromptToVideoLive() {
     if (!scene) return;
     setScenes(prev => prev.map((s, i) => i === index ? { ...s, isGeneratingAudio: true, audioError: false } : s));
     try {
-      console.log(`[Audio Gen] Scene ${index + 1}: Calling /api/tts with voiceId="${scene.voiceId}"`);
+      console.log(`[Audio Gen] Scene ${index + 1}: Calling /api/text-to-speech with voiceId="${scene.voiceId}"`);
       const audioUrl = await fetchTtsAudio(scene.narration, scene.voiceId);
       setScenes(prev => prev.map((s, i) => i === index ? { ...s, isGeneratingAudio: false, audioUrl } : s));
     } catch (error) {
@@ -206,7 +206,6 @@ export default function PromptToVideoLive() {
     }
   };
 
-  // FIX: generateScript now syncs scenesRef immediately and triggers /api/ calls
   const generateScript = async () => {
     if (!mainPrompt.trim()) return;
     setIsGeneratingScript(true);
@@ -216,7 +215,7 @@ export default function PromptToVideoLive() {
       const matchedTheme = getMatchingThemeVoice(mainPrompt);
       generatedScenes = generateScenesFromPrompt(mainPrompt, matchedTheme);
       setScenes(generatedScenes);
-      scenesRef.current = generatedScenes; // FIX: sync ref immediately so generation functions can read it
+      scenesRef.current = generatedScenes;
       setScriptGenerated(true);
       setCurrentSceneIndex(0);
     } catch (error) {
@@ -224,14 +223,13 @@ export default function PromptToVideoLive() {
       const matchedTheme = getMatchingThemeVoice(mainPrompt);
       generatedScenes = generateScenesFromPrompt(mainPrompt, matchedTheme);
       setScenes(generatedScenes);
-      scenesRef.current = generatedScenes; // FIX: sync ref immediately
+      scenesRef.current = generatedScenes;
       setScriptGenerated(true);
       setCurrentSceneIndex(0);
     } finally {
       setIsGeneratingScript(false);
     }
 
-    // FIX: auto-trigger /api/image and /api/tts calls for every scene
     if (generatedScenes.length > 0) {
       setGeneratingAll(true);
       try {
