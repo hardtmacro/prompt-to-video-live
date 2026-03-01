@@ -22,6 +22,30 @@ const VOICE_OPTIONS = [
   { id: 'orpheus-en', label: 'Orpheus (Rich)', flag: '🎵' },
 ];
 
+// Theme to voice mapping for automatic voice assignment
+const THEME_VOICES: Record<string, { voice: string; voiceLabel: string }> = {
+  'adventure': { voice: 'zeus-en', voiceLabel: 'adventure' },
+  'love': { voice: 'luna-en', voiceLabel: 'romance' },
+  'romance': { voice: 'luna-en', voiceLabel: 'romance' },
+  'mystery': { voice: 'orpheus-en', voiceLabel: 'mystery' },
+  'sci-fi': { voice: 'asteria-en', voiceLabel: 'sci-fi' },
+  'scifi': { voice: 'asteria-en', voiceLabel: 'sci-fi' },
+  'fantasy': { voice: 'hermes-en', voiceLabel: 'fantasy' },
+  'magical': { voice: 'hermes-en', voiceLabel: 'fantasy' },
+  'history': { voice: 'orion-en', voiceLabel: 'historical' },
+  'historical': { voice: 'orion-en', voiceLabel: 'historical' },
+  'nature': { voice: 'aurora-en', voiceLabel: 'nature' },
+  'technology': { voice: 'athena-en', voiceLabel: 'tech' },
+  'tech': { voice: 'athena-en', voiceLabel: 'tech' },
+  'hero': { voice: 'zeus-en', voiceLabel: 'heroic' },
+  'space': { voice: 'orion-en', voiceLabel: 'space' },
+  'robot': { voice: 'athena-en', voiceLabel: 'tech' },
+  'paris': { voice: 'luna-en', voiceLabel: 'romance' },
+  'ancient': { voice: 'orion-en', voiceLabel: 'historical' },
+  'ruins': { voice: 'orpheus-en', voiceLabel: 'mystery' },
+  'forest': { voice: 'aurora-en', voiceLabel: 'nature' },
+};
+
 interface Scene {
   id: number;
   prompt: string;
@@ -51,7 +75,7 @@ const DEFAULT_SCENES: Scene[] = [
     id: 2,
     prompt: "An astronaut floating in space with Earth visible in the background",
     narration: "In the vastness of space, humanity's journey continues, reaching for the stars.",
-    voiceId: 'zeus-en',
+    voiceId: 'orion-en',
     imageUrl: null,
     isGeneratingImage: false,
     isGeneratingAudio: false,
@@ -62,7 +86,7 @@ const DEFAULT_SCENES: Scene[] = [
     id: 3,
     prompt: "A magical forest with glowing mushrooms and fireflies at night",
     narration: "Deep in the enchanted forests, ancient magic still whispers through the trees.",
-    voiceId: 'luna-en',
+    voiceId: 'hermes-en',
     imageUrl: null,
     isGeneratingImage: false,
     isGeneratingAudio: false,
@@ -82,6 +106,161 @@ const DEFAULT_SCENES: Scene[] = [
   },
 ];
 
+// Find matching theme voice from prompt
+const getMatchingThemeVoice = (prompt: string): { voice: string; voiceLabel: string } => {
+  const promptLower = prompt.toLowerCase();
+  
+  for (const [keyword, theme] of Object.entries(THEME_VOICES)) {
+    if (promptLower.includes(keyword)) {
+      return theme;
+    }
+  }
+  
+  return { voice: 'asteria-en', voiceLabel: 'story' };
+};
+
+// Browser-native Text-to-Speech using SpeechSynthesis API
+const speakText = (text: string, voiceId: string): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    if (!('speechSynthesis' in window)) {
+      reject(new Error('SpeechSynthesis not supported'));
+      return;
+    }
+
+    // Cancel any ongoing speech
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    
+    // Map voice IDs to browser-available voices
+    const voiceIdMap: Record<string, string[]> = {
+      'asteria-en': ['Microsoft Zira', 'Google US English', 'Samantha'],
+      'luna-en': ['Microsoft Hazel', 'Google UK English Female', 'Victoria'],
+      'zeus-en': ['Microsoft David', 'Google US English', 'Daniel'],
+      'orion-en': ['Microsoft Mark', 'Google US English', 'Alex'],
+      'aurora-en': ['Microsoft Zira', 'Google UK English Female', 'Samantha'],
+      'hermes-en': ['Microsoft Zira', 'Google US English', 'Samantha'],
+      'athena-en': ['Microsoft Zira', 'Google US English', 'Samantha'],
+      'orpheus-en': ['Microsoft David', 'Google US English', 'Daniel'],
+    };
+
+    const preferredVoices = voiceIdMap[voiceId] || voiceIdMap['asteria-en'];
+    
+    const voices = window.speechSynthesis.getVoices();
+    
+    // Try to find a matching voice
+    let selectedVoice = voices.find(v => 
+      preferredVoices.some(pv => v.name.includes(pv)) && v.lang.startsWith('en')
+    );
+    
+    if (!selectedVoice) {
+      // Fallback to any English voice
+      selectedVoice = voices.find(v => v.lang.startsWith('en'));
+    }
+    
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+    }
+    
+    utterance.rate = 0.9;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+
+    utterance.onend = () => resolve();
+    utterance.onerror = (e) => reject(e);
+
+    window.speechSynthesis.speak(utterance);
+  });
+};
+
+// Generate a unique gradient background SVG based on scene prompt
+const generateSceneImageSvg = (prompt: string, sceneIndex: number): string => {
+  const colors = [
+    ['#667eea', '#764ba2'], // Purple-blue
+    ['#f093fb', '#f5576c'], // Pink-orange
+    ['#4facfe', '#00f2fe'], // Blue-cyan
+    ['#43e97b', '#38f9d7'], // Green-teal
+    ['#fa709a', '#fee140'], // Pink-yellow
+    ['#a8edea', '#fed6e3'], // Soft pastel
+    ['#ff9a9e', '#fecfef'], // Rose
+    ['#ffecd2', '#fcb69f'], // Peach
+    ['#ff6b6b', '#556270'], // Red-slate
+    ['#4bc0c8', '#c779d0'], // Teal-purple
+  ];
+  
+  const colorPair = colors[sceneIndex % colors.length];
+  
+  // Create a unique pattern based on the prompt hash
+  const promptHash = prompt.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const patternType = promptHash % 4;
+  
+  let patternSvg = '';
+  
+  if (patternType === 0) {
+    // Radial gradient
+    patternSvg = `
+      <defs>
+        <radialGradient id="grad${sceneIndex}" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+          <stop offset="0%" style="stop-color:${colorPair[0]};stop-opacity:1" />
+          <stop offset="100%" style="stop-color:${colorPair[1]};stop-opacity:1" />
+        </radialGradient>
+      </defs>
+      <rect width="800" height="450" fill="url(#grad${sceneIndex})"/>
+      <circle cx="${200 + (promptHash % 300)}" cy="${150 + (promptHash % 150)}" r="${50 + (promptHash % 100)}" fill="rgba(255,255,255,0.1)"/>
+      <circle cx="${400 + (promptHash % 200)}" cy="${250 + (promptHash % 100)}" r="${30 + (promptHash % 50)}" fill="rgba(255,255,255,0.15)"/>
+    `;
+  } else if (patternType === 1) {
+    // Linear gradient diagonal
+    patternSvg = `
+      <defs>
+        <linearGradient id="grad${sceneIndex}" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:${colorPair[0]};stop-opacity:1" />
+          <stop offset="100%" style="stop-color:${colorPair[1]};stop-opacity:1" />
+        </linearGradient>
+      </defs>
+      <rect width="800" height="450" fill="url(#grad${sceneIndex})"/>
+      <polygon points="${200 + (promptHash % 100)},50 ${300 + (promptHash % 100)},200 ${100 + (promptHash % 100)},200" fill="rgba(255,255,255,0.1)"/>
+      <rect x="${400 + (promptHash % 100)}" y="${250 + (promptHash % 100)}" width="150" height="150" fill="rgba(255,255,255,0.08)" transform="rotate(${promptHash % 30} 475 325)"/>
+    `;
+  } else if (patternType === 2) {
+    // Animated-looking pattern
+    patternSvg = `
+      <defs>
+        <linearGradient id="grad${sceneIndex}" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" style="stop-color:${colorPair[0]};stop-opacity:1" />
+          <stop offset="100%" style="stop-color:${colorPair[1]};stop-opacity:1" />
+        </linearGradient>
+      </defs>
+      <rect width="800" height="450" fill="url(#grad${sceneIndex})"/>
+      <ellipse cx="${300 + (promptHash % 200)}" cy="225" rx="${100 + (promptHash % 50)}" ry="${80 + (promptHash % 40)}" fill="rgba(255,255,255,0.12)"/>
+      <line x1="0" y1="${100 + (promptHash % 200)}" x2="800" y2="${150 + (promptHash % 200)}" stroke="rgba(255,255,255,0.1)" stroke-width="2"/>
+      <line x1="0" y1="${250 + (promptHash % 150)}" x2="800" y2="${300 + (promptHash % 150)}" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+    `;
+  } else {
+    // Abstract shapes
+    patternSvg = `
+      <defs>
+        <radialGradient id="grad${sceneIndex}" cx="30%" cy="30%" r="70%">
+          <stop offset="0%" style="stop-color:${colorPair[0]};stop-opacity:1" />
+          <stop offset="100%" style="stop-color:${colorPair[1]};stop-opacity:1" />
+        </radialGradient>
+      </defs>
+      <rect width="800" height="450" fill="url(#grad${sceneIndex})"/>
+      <circle cx="${200 + (promptHash % 200)}" cy="${100 + (promptHash % 100)}" r="${60 + (promptHash % 40)}" fill="rgba(255,255,255,0.1)"/>
+      <circle cx="${500 + (promptHash % 150)}" cy="${300 + (promptHash % 100)}" r="${80 + (promptHash % 50)}" fill="rgba(255,255,255,0.08)"/>
+      <rect x="${350 + (promptHash % 50)}" y="${180 + (promptHash % 50)}" width="100" height="100" fill="rgba(255,255,255,0.06)" rx="10"/>
+    `;
+  }
+
+  // Add scene number and prompt text
+  patternSvg += `
+    <text x="400" y="400" font-family="system-ui, sans-serif" font-size="24" fill="rgba(255,255,255,0.8)" text-anchor="middle">Scene ${sceneIndex + 1}</text>
+    <text x="400" y="430" font-family="system-ui, sans-serif" font-size="14" fill="rgba(255,255,255,0.5)" text-anchor="middle">${prompt.substring(0, 50)}${prompt.length > 50 ? '...' : ''}</text>
+  `;
+
+  return `data:image/svg+xml;base64,${btoa(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450">${patternSvg}</svg>`)}`;
+};
+
 export default function PromptToVideoLive() {
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [currentSceneIndex, setCurrentSceneIndex] = useState(0);
@@ -99,6 +278,7 @@ export default function PromptToVideoLive() {
   const containerRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const isPlayingRef = useRef(false);
+  const speechSynthesisRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   // Update ref when isPlaying changes
   useEffect(() => {
@@ -125,44 +305,11 @@ export default function PromptToVideoLive() {
     setIsGeneratingScript(true);
     
     try {
-      // Use the main prompt to generate a script with engaging story arc
-      // We'll create 4-5 scenes with proper narrative structure
-      const promptForScript = `Create an engaging video script with 4-5 scenes based on this prompt: "${mainPrompt}". 
-
-For each scene, provide:
-1. scene_prompt: A vivid image generation prompt (visual description)
-2. narration: The spoken text (2-3 sentences, engaging and descriptive)
-3. voice: Choose from these voices based on the scene mood: asteria-en (confident), luna-en (warm), zeus-en (authoritative), orion-en (deep), aurora-en (bright), hermes-en (smooth), athena-en (professional), orpheus-en (rich)
-
-Structure the story with:
-- Opening/Introduction (set the scene)
-- Rising action (build interest)
-- Climax (most dramatic moment)
-- Resolution/Conclusion (satisfying ending)
-
-Return ONLY a JSON array with this exact format:
-[
-  {"scene_prompt": "...", "narration": "...", "voice": "voice-id"},
-  ...
-]
-
-Do NOT include any other text or explanation.`;
-
-      const res = await fetch('/api/text-to-speech', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          text: promptForScript, 
-          voiceId: 'athena-en'
-        }),
-      });
-
-      // The text-to-speech API returns audio, but we need the text
-      // Let's instead create a structured script based on the prompt
-      // We'll generate scenes programmatically based on the theme
+      // Get matching theme voice based on prompt
+      const matchedTheme = getMatchingThemeVoice(mainPrompt);
       
-      // For now, generate scenes based on the main prompt theme
-      const generatedScenes: Scene[] = generateScenesFromPrompt(mainPrompt);
+      // Generate scenes based on the main prompt theme
+      const generatedScenes: Scene[] = generateScenesFromPrompt(mainPrompt, matchedTheme);
       
       setScenes(generatedScenes);
       setScriptGenerated(true);
@@ -171,7 +318,8 @@ Do NOT include any other text or explanation.`;
     } catch (error) {
       console.error('Script generation error:', error);
       // Fallback to default scenes with modified prompts
-      const generatedScenes: Scene[] = generateScenesFromPrompt(mainPrompt);
+      const matchedTheme = getMatchingThemeVoice(mainPrompt);
+      const generatedScenes: Scene[] = generateScenesFromPrompt(mainPrompt, matchedTheme);
       setScenes(generatedScenes);
       setScriptGenerated(true);
     } finally {
@@ -179,35 +327,20 @@ Do NOT include any other text or explanation.`;
     }
   };
 
-  // Generate scenes from prompt
-  const generateScenesFromPrompt = (prompt: string): Scene[] => {
+  // Generate scenes from prompt - uses matched theme voice for each scene
+  const generateScenesFromPrompt = (prompt: string, matchedTheme: { voice: string; voiceLabel: string }): Scene[] => {
     const promptLower = prompt.toLowerCase();
-    const baseSceneCount = 4;
     const scenes: Scene[] = [];
     
-    // Determine theme and create appropriate scenes
-    const themes = [
-      { keyword: 'adventure', voice: 'zeus-en', voiceLabel: 'adventure' },
-      { keyword: 'love', voice: 'luna-en', voiceLabel: 'romance' },
-      { keyword: 'mystery', voice: 'orpheus-en', voiceLabel: 'mystery' },
-      { keyword: 'sci-fi', voice: 'asteria-en', voiceLabel: 'sci-fi' },
-      { keyword: 'fantasy', voice: 'hermes-en', voiceLabel: 'fantasy' },
-      { keyword: 'history', voice: 'orion-en', voiceLabel: 'historical' },
-      { keyword: 'nature', voice: 'aurora-en', voiceLabel: 'nature' },
-      { keyword: 'technology', voice: 'athena-en', voiceLabel: 'tech' },
-    ];
-    
-    // Find matching theme
-    const matchedTheme = themes.find(t => promptLower.includes(t.keyword)) || { voice: 'asteria-en', voiceLabel: 'story' };
-    
-    // Story arc templates
+    // Story arc templates - each scene uses the matched theme voice
     const storyArcs = [
       {
         type: 'opening',
         template: {
           prompt: `${prompt} - establishing shot, wide cinematic view, dramatic lighting`,
           narration: `Welcome to ${prompt}. This is where our journey begins, in a world where every moment holds wonder and possibility.`,
-          voiceId: 'asteria-en'
+          // Use matched theme voice for opening
+          voiceId: matchedTheme.voice
         }
       },
       {
@@ -215,7 +348,8 @@ Do NOT include any other text or explanation.`;
         template: {
           prompt: `${prompt} - action moment, dynamic composition, intense atmosphere`,
           narration: `As the story unfolds, we discover the true essence of this ${matchedTheme.voiceLabel}. Every detail reveals a deeper meaning.`,
-          voiceId: 'zeus-en'
+          // Use matched theme voice for rising action
+          voiceId: matchedTheme.voice
         }
       },
       {
@@ -223,7 +357,8 @@ Do NOT include any other text or explanation.`;
         template: {
           prompt: `${prompt} - dramatic peak moment, powerful visuals, emotional intensity`,
           narration: `At this pivotal moment, everything changes. The stakes are highest, and the journey reaches its dramatic peak.`,
-          voiceId: 'orion-en'
+          // Use matched theme voice for climax
+          voiceId: matchedTheme.voice
         }
       },
       {
@@ -231,7 +366,8 @@ Do NOT include any other text or explanation.`;
         template: {
           prompt: `${prompt} - peaceful conclusion, warm lighting, satisfying ending`,
           narration: `And so our tale comes to a peaceful close, leaving us with memories that will last forever.`,
-          voiceId: 'luna-en'
+          // Use matched theme voice for resolution
+          voiceId: matchedTheme.voice
         }
       }
     ];
@@ -261,6 +397,10 @@ Do NOT include any other text or explanation.`;
     setMainPrompt('');
     setCurrentSceneIndex(0);
     setIsPlaying(false);
+    // Cancel any ongoing speech
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
   };
 
   // Handle scene completion and progression
@@ -268,6 +408,10 @@ Do NOT include any other text or explanation.`;
     if (!isPlayingRef.current || index >= scenes.length) {
       setIsPlaying(false);
       isPlayingRef.current = false;
+      // Cancel any ongoing speech
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
       return;
     }
 
@@ -278,105 +422,22 @@ Do NOT include any other text or explanation.`;
       
       setCurrentSceneIndex(index);
 
-      // Wait for image and audio to be ready
-      if (!scene.imageUrl || scene.isGeneratingImage || scene.isGeneratingAudio) {
+      // Wait for image to be ready
+      if (!scene.imageUrl || scene.isGeneratingImage) {
         // Wait a bit and check again
         setTimeout(() => playNextScene(index), 500);
         return prevScenes;
       }
 
-      // Generate and play audio
+      // Use browser-native SpeechSynthesis for narration
       (async () => {
         try {
-          // First ensure we have audio generated
-          let audioUrlToPlay = scene.audioUrl;
+          // Debug log to verify correct voice is being used
+          console.log(`[Audio Playback] Scene ${index + 1}: Using voice "${scene.voiceId}" for narration`);
           
-          if (!audioUrlToPlay) {
-            // Debug log to verify voice is being used
-            console.log(`[Audio Generation] Scene ${index + 1}: Using voiceId="${scene.voiceId}" for narration`);
-            
-            // Generate audio on-the-fly if not already generated
-            const res = await fetch('/api/text-to-speech', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ 
-                text: scene.narration, 
-                voiceId: scene.voiceId 
-              }),
-            });
-
-            if (!res.ok) {
-              console.error('Audio generation failed:', res.status);
-              // Move to next scene even if audio fails
-              playNextScene(index + 1);
-              return;
-            }
-
-            if (res.headers.get('content-type')?.includes('audio')) {
-              const blob = await res.blob();
-              audioUrlToPlay = URL.createObjectURL(blob);
-              
-              // Store the audio URL for future use
-              setScenes(prev => prev.map((s, i) => 
-                i === index ? { ...s, audioUrl: audioUrlToPlay } : s
-              ));
-            } else {
-              console.error('Invalid audio response');
-              playNextScene(index + 1);
-              return;
-            }
-          }
-
-          // Play the audio
-          if (audioUrlToPlay) {
-            // Clean up previous audio
-            if (audioRef.current) {
-              audioRef.current.pause();
-              audioRef.current = null;
-            }
-            if (currentAudioUrl) {
-              URL.revokeObjectURL(currentAudioUrl);
-            }
-
-            setCurrentAudioUrl(audioUrlToPlay);
-            
-            const audio = new Audio(audioUrlToPlay);
-            audioRef.current = audio;
-
-            // Wait for audio to load and start playing
-            await new Promise<void>((resolve) => {
-              const handleCanPlay = () => {
-                audio.removeEventListener('canplay', handleCanPlay);
-                audio.removeEventListener('error', handleError);
-                
-                // Try to play and handle autoplay restrictions
-                audio.play()
-                  .then(() => {
-                    // Audio is playing, wait for it to end
-                    audio.onended = () => {
-                      audio.onended = null;
-                      resolve();
-                    };
-                  })
-                  .catch((err) => {
-                    console.error('Audio play error:', err);
-                    // Even if play fails, try to proceed
-                    resolve();
-                  });
-              };
-
-              const handleError = (e: Event) => {
-                audio.removeEventListener('canplay', handleCanPlay);
-                audio.removeEventListener('error', handleError);
-                console.error('Audio error event:', e);
-                resolve();
-              };
-
-              audio.addEventListener('canplay', handleCanPlay);
-              audio.addEventListener('error', handleError);
-              audio.load();
-            });
-          }
+          // Speak the narration using browser TTS
+          await speakText(scene.narration, scene.voiceId);
+          
         } catch (error) {
           console.error('Audio playback error:', error);
         }
@@ -387,15 +448,16 @@ Do NOT include any other text or explanation.`;
 
       return prevScenes;
     });
-  }, [scenes, currentAudioUrl]);
+  }, [scenes]);
 
   // Toggle play/pause
   const togglePlay = async () => {
     if (isPlaying) {
       setIsPlaying(false);
       isPlayingRef.current = false;
-      if (audioRef.current) {
-        audioRef.current.pause();
+      // Cancel any ongoing speech
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
       }
     } else {
       const currentScene = scenes[currentSceneIndex];
@@ -408,7 +470,7 @@ Do NOT include any other text or explanation.`;
     }
   };
 
-  // Generate image for a scene
+  // Generate image for a scene - using SVG fallback for static export
   const generateSceneImage = async (index: number) => {
     const scene = scenes[index];
     if (!scene) return;
@@ -418,18 +480,11 @@ Do NOT include any other text or explanation.`;
     ));
 
     try {
-      const res = await fetch('/api/generate-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: scene.prompt }),
-      });
-
-      if (!res.ok) throw new Error('Image generation failed');
-
-      const data = await res.json();
+      // Generate SVG image inline (works without API routes)
+      const svgDataUrl = generateSceneImageSvg(scene.prompt, index);
       
       setScenes(prev => prev.map((s, i) => 
-        i === index ? { ...s, imageUrl: data.url, isGeneratingImage: false } : s
+        i === index ? { ...s, imageUrl: svgDataUrl, isGeneratingImage: false } : s
       ));
     } catch (error) {
       console.error('Image generation error:', error);
@@ -439,11 +494,9 @@ Do NOT include any other text or explanation.`;
     }
   };
 
-  // Generate audio for a scene - ensuring voiceId is always used
+  // Generate audio for a scene - using browser SpeechSynthesis
   const generateSceneAudio = async (index: number) => {
-    // Get fresh scene data to ensure we have the latest voiceId
-    const currentScenes = scenes;
-    const scene = currentScenes[index];
+    const scene = scenes[index];
     if (!scene) return;
 
     setScenes(prev => prev.map((s, i) => 
@@ -451,32 +504,19 @@ Do NOT include any other text or explanation.`;
     ));
 
     try {
-      // Debug log to verify voice is being used
-      console.log(`[Generate Audio] Scene ${index + 1}: Using voiceId="${scene.voiceId}" for narration: "${scene.narration.substring(0, 50)}..."`);
+      // Debug log to verify narrator voice is being used
+      console.log(`[Generate Audio] Scene ${index + 1}: Using voice "${scene.voiceId}" for narration: "${scene.narration.substring(0, 50)}..."`);
 
-      const res = await fetch('/api/text-to-speech', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          text: scene.narration, 
-          voiceId: scene.voiceId 
-        }),
-      });
-
-      if (!res.ok) throw new Error('Audio generation failed');
-
-      if (res.headers.get('content-type')?.includes('audio')) {
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        
-        setScenes(prev => prev.map((s, i) => 
-          i === index ? { ...s, isGeneratingAudio: false, audioUrl: url } : s
-        ));
-      } else {
-        setScenes(prev => prev.map((s, i) => 
-          i === index ? { ...s, isGeneratingAudio: false, audioError: true } : s
-        ));
+      // Test if SpeechSynthesis is available
+      if (!('speechSynthesis' in window)) {
+        throw new Error('SpeechSynthesis not supported');
       }
+
+      // For pre-generation, we mark it as ready (actual playback uses speakText)
+      // SpeechSynthesis doesn't generate audio files, so we just mark it ready
+      setScenes(prev => prev.map((s, i) => 
+        i === index ? { ...s, isGeneratingAudio: false, audioUrl: 'browser-tts-ready' } : s
+      ));
     } catch (error) {
       console.error('Audio generation error:', error);
       setScenes(prev => prev.map((s, i) => 
@@ -485,59 +525,22 @@ Do NOT include any other text or explanation.`;
     }
   };
 
-  // Play audio manually for a scene (for testing)
+  // Play audio manually for a scene
   const playSceneAudio = async (index: number) => {
-    // Get fresh scene data to ensure we have the latest voiceId
     const scene = scenes[index];
     if (!scene) return;
 
-    // Debug log to verify voice is being used
-    console.log(`[Play Audio] Scene ${index + 1}: Using voiceId="${scene.voiceId}"`);
+    // Debug log to verify narrator voice is being used
+    console.log(`[Play Audio] Scene ${index + 1}: Using voice "${scene.voiceId}"`);
 
-    // If audio doesn't exist, generate it first
-    if (!scene.audioUrl) {
-      await generateSceneAudio(index);
-      // Re-get the scene after generation - use functional update to get latest
-      setScenes(prev => {
-        const updatedScene = prev[index];
-        if (!updatedScene?.audioUrl) {
-          return prev;
-        }
-        // Continue playing with updated scene
-        (async () => {
-          // Stop current audio if playing
-          if (audioRef.current) {
-            audioRef.current.pause();
-            audioRef.current = null;
-          }
-
-          // Play the audio
-          const audio = new Audio(updatedScene.audioUrl);
-          audioRef.current = audio;
-
-          try {
-            await audio.play();
-          } catch (error) {
-            console.error('Error playing audio:', error);
-          }
-        })();
-        return prev;
-      });
-      return;
+    // Cancel any ongoing speech
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
     }
 
-    // Stop current audio if playing
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
-
-    // Play the audio
-    const audio = new Audio(scene.audioUrl);
-    audioRef.current = audio;
-
+    // Use browser-native TTS
     try {
-      await audio.play();
+      await speakText(scene.narration, scene.voiceId);
     } catch (error) {
       console.error('Error playing audio:', error);
     }
@@ -562,10 +565,9 @@ Do NOT include any other text or explanation.`;
 
   // Skip to scene
   const skipToScene = (index: number) => {
-    if (audioRef.current) {
-      audioRef.current.onended = null;
-      audioRef.current.pause();
-      audioRef.current = null;
+    // Cancel any ongoing speech
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
     }
     setCurrentSceneIndex(index);
     setIsPlaying(true);
@@ -573,9 +575,12 @@ Do NOT include any other text or explanation.`;
     playNextScene(index);
   };
 
-  // Cleanup audio on unmount
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
@@ -655,7 +660,7 @@ Do NOT include any other text or explanation.`;
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-white">Create Your Video Script</h2>
-                  <p className="text-sm text-neutral-400">Enter a prompt and we'll generate an engaging story with scenes</p>
+                  <p className="text-sm text-neutral-400">Enter a prompt and we&apos;ll generate an engaging story with scenes</p>
                 </div>
               </div>
               
@@ -951,7 +956,7 @@ Do NOT include any other text or explanation.`;
 
                           <button
                             onClick={() => playSceneAudio(index)}
-                            disabled={!scene.audioUrl || scene.isGeneratingAudio}
+                            disabled={scene.isGeneratingAudio}
                             className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-medium transition-colors disabled:opacity-50 flex items-center gap-1.5"
                           >
                             <Volume2 className="w-3 h-3" />
