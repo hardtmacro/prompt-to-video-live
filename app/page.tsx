@@ -122,6 +122,7 @@ export default function PromptToVideoPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [hasGenerated, setHasGenerated] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const isPlayingRef = useRef(false)
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -131,6 +132,10 @@ export default function PromptToVideoPage() {
   useEffect(() => {
     scenesRef.current = scenes
   }, [scenes])
+
+  useEffect(() => {
+    isPlayingRef.current = isPlaying
+  }, [isPlaying])
 
   const updateScene = useCallback((index: number, updates: Partial<Scene>) => {
     setScenes(prev => {
@@ -158,7 +163,8 @@ export default function PromptToVideoPage() {
 
   const generateSceneAudio = useCallback(async (index: number): Promise<string | null> => {
     const current = scenesRef.current[index]
-    if (!current) return null
+    if (!current || current.isGeneratingAudio) return current?.audioUrl || null
+    
     updateScene(index, { isGeneratingAudio: true })
     try {
       const res = await fetch('/api/text-to-speech', {
@@ -176,32 +182,6 @@ export default function PromptToVideoPage() {
       return null
     }
   }, [updateScene])
-
-  const handleGenerate = useCallback(async () => {
-    if (!prompt.trim() || isGenerating) return
-    setIsGenerating(true)
-    setIsPlaying(false)
-    setCurrentSceneIndex(0)
-
-    if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current = null
-    }
-
-    const newScenes = generateScenesFromPrompt(prompt)
-    setScenes(newScenes)
-    scenesRef.current = newScenes
-    setHasGenerated(true)
-
-    const imagePromises = newScenes.map((scene, i) => generateSceneImage(scene, i))
-    const audioPromises = newScenes.map((_, i) => {
-      scenesRef.current = newScenes
-      return generateSceneAudio(i)
-    })
-
-    await Promise.allSettled([...imagePromises, ...audioPromises])
-    setIsGenerating(false)
-  }, [prompt, isGenerating, generateSceneImage, generateSceneAudio])
 
   const playSceneAudio = useCallback(async (index: number) => {
     if (audioRef.current) {
@@ -223,7 +203,7 @@ export default function PromptToVideoPage() {
 
     audio.onended = () => {
       const nextIndex = index + 1
-      if (nextIndex < scenesRef.current.length && isPlaying) {
+      if (nextIndex < scenesRef.current.length && isPlayingRef.current) {
         setCurrentSceneIndex(nextIndex)
         playSceneAudio(nextIndex)
       } else {
@@ -236,7 +216,35 @@ export default function PromptToVideoPage() {
     } catch {
       setIsPlaying(false)
     }
-  }, [isPlaying, generateSceneAudio])
+  }, [generateSceneAudio])
+
+  const handleGenerate = useCallback(async () => {
+    if (!prompt.trim() || isGenerating) return
+    setIsGenerating(true)
+    setIsPlaying(false)
+    setCurrentSceneIndex(0)
+
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
+    }
+
+    const newScenes = generateScenesFromPrompt(prompt)
+    setScenes(newScenes)
+    scenesRef.current = newScenes
+    setHasGenerated(true)
+
+    // Trigger all generations in parallel without blocking the UI
+    newScenes.forEach((scene, i) => {
+      generateSceneImage(scene, i)
+      generateSceneAudio(i)
+    })
+
+    // Allow UI to become interactive immediately
+    setIsGenerating(false)
+    setIsPlaying(true)
+    playSceneAudio(0)
+  }, [prompt, isGenerating, generateSceneImage, generateSceneAudio, playSceneAudio])
 
   const handlePlay = useCallback(() => {
     if (scenes.length === 0) return
@@ -478,7 +486,10 @@ export default function PromptToVideoPage() {
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: i * 0.1 }}
-                      onClick={() => setCurrentSceneIndex(i)}
+                      onClick={() => {
+                        setCurrentSceneIndex(i)
+                        if (isPlaying) playSceneAudio(i)
+                      }}
                       className={clsx(
                         'p-3 rounded-xl border cursor-pointer transition-all',
                         i === currentSceneIndex
